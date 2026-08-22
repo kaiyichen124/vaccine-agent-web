@@ -128,7 +128,9 @@ function normalizeEmptyDecisionTables(answer) {
 function normalizeIntroSections(answer) {
   let normalized = answer
     .replace(/^(#{1,4})\s*结论摘要\s*$/m, '$1 一句话结论')
-    .replace(/^(#{1,4})\s*(?:病例摘要|基本情况|患儿情况)\s*$/m, '$1 孩子目前情况');
+    .replace(/^(#{1,4})\s*(?:病例摘要|基本情况|患儿情况)\s*$/m, '$1 孩子目前情况')
+    .replace(/^一句话结论[：:]\s*/m, '### 一句话结论\n')
+    .replace(/^(?:孩子目前情况|病例摘要|基本情况|患儿情况)[：:]\s*/m, '### 孩子目前情况\n');
   const additions = [];
   if (!sectionPattern('一句话结论').test(normalized)) {
     additions.push('### 一句话结论\n请查看下方按“现在建议接种、暂缓或接种前需评估、目前不用接种”整理的疫苗建议。');
@@ -179,6 +181,7 @@ function normalizeDeterministicGrouping(answer, safetyContext) {
   if (notNeededHeading < 0) return filtered.join('\n');
   let insertAt = notNeededHeading + 1;
   while (insertAt < filtered.length && !/^#{1,4}\s+/.test(filtered[insertAt].trim())) insertAt += 1;
+  while (insertAt > notNeededHeading + 1 && !filtered[insertAt - 1].trim()) insertAt -= 1;
 
   const existingNames = new Set(firstColumnValues(getSection(filtered.join('\n'), '目前不用接种')));
   const rows = movedToNotNeeded
