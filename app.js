@@ -15,8 +15,14 @@ function value(id, fallback = '无') {
 
 function getSafetyContext() {
   const ageText = value('age', '未知');
-  const ageMatch = ageText.match(/\d+(?:\.\d+)?/);
-  const ageYears = ageMatch ? Number(ageMatch[0]) : null;
+  const yearMatch = ageText.match(/(\d+(?:\.\d+)?)\s*岁/);
+  const monthMatch = ageText.match(/(\d+(?:\.\d+)?)\s*个?月/);
+  let ageYears = null;
+  if (yearMatch || monthMatch) ageYears = Number(yearMatch?.[1] || 0) + Number(monthMatch?.[1] || 0) / 12;
+  else {
+    const ageMatch = ageText.match(/\d+(?:\.\d+)?/);
+    ageYears = ageMatch ? Number(ageMatch[0]) : null;
+  }
   const treatment = value('treatment');
   const combined = `${value('condition', '未知')} ${treatment} ${value('other')}`;
   const temperatureMatch = combined.match(/(?:体温)?\s*(\d{2}(?:\.\d+)?)\s*(?:℃|度)/);
@@ -45,7 +51,7 @@ function getSafetyContext() {
 function buildCaseInfo() {
   return [
     getSafetyContext().text,
-    '接种记录解释规则（必须执行）：用户提到的疫苗，如未明确写明“未接种、未完成、漏种、仅接种若干剂或剂次不清”，一律视为已完成截至当前年龄的全部剂次，不再推荐；未提到的疫苗一律视为从未接种，必须结合年龄和健康情况直接归入建议接种、建议补种或因医学原因暂缓，不得放入建议确认要求核对记录。建议确认只用于确实影响接种的疾病、治疗、过敏或明确写出的剂次不清。',
+    '接种记录解释规则（必须执行）：用户提到的疫苗，如未明确写明“未接种、未完成、漏种、仅接种若干剂或剂次不清”，一律视为已完成截至当前年龄的全部剂次，不再推荐；未提到的疫苗一律视为从未接种，必须逐项覆盖截至该年龄应接种的国家免疫规划疫苗，并结合健康情况直接归入建议接种、建议补种或因医学原因暂缓，不得放入建议确认要求核对记录。对于从未接种或未完成的疫苗，按疫苗名称写“按补种程序补齐适龄剂次”，不要只写当前年龄对应的某一剂。建议确认只用于确实影响接种的疾病、治疗、过敏或明确写出的剂次不清。',
     `年龄：${value('age', '未知')}`,
     `当前健康情况：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment')}`,
@@ -208,8 +214,31 @@ function hasExplicitUncertainDose(vaccineName) {
 
 function ensureDoseCheckNote(answer) {
   const note = '提示：建议携带接种证核对已接种疫苗的实际剂次。';
-  const cleaned = answer.replace(/^.*建议.*核对已接种疫苗.*剂次.*$/gm, '').trim();
+  const cleaned = answer
+    .replace(/^.*建议.*核对已接种疫苗.*剂次.*$/gm, '')
+    .replace(/^\s*(?:[-*]|\d+[.)])?\s*.*(?:核对上述疫苗|确认漏种|核对.*实际接种情况).*$/gm, '')
+    .trim();
   return `${cleaned}\n\n${note}`;
+}
+
+function expectedUnmentionedNip(ageYears) {
+  if (ageYears === null) return [];
+  const thresholds = [
+    ['乙肝疫苗', /乙肝/, 0],
+    ['卡介苗', /卡介苗/, 0, 4],
+    ['脊灰疫苗', /脊灰|脊髓灰质炎/, 2 / 12],
+    ['百白破疫苗', /百白破/, 3 / 12],
+    ['流脑疫苗', /流脑/, 6 / 12],
+    ['麻腮风疫苗', /麻腮风/, 8 / 12],
+    ['乙脑疫苗', /乙脑/, 8 / 12],
+    ['甲肝疫苗', /甲肝/, 18 / 12],
+  ];
+  const record = value('vaccination', '');
+  const allNipComplete = /(?:已完成|全程).{0,8}(?:国家免疫规划|免疫规划疫苗)|(?:国家免疫规划|免疫规划疫苗).{0,8}(?:已完成|全程)/.test(record);
+  if (allNipComplete) return [];
+  return thresholds.filter(([, alias, minimum, maximum]) => ageYears >= minimum
+    && (maximum === undefined || ageYears < maximum)
+    && !vaccineRecordSegment(alias).trim());
 }
 
 function insertRowsIntoTable(lines, sectionName, header, emptyRow, rows) {
@@ -353,6 +382,11 @@ function validateAnswer(answer, safetyContext) {
     return /接种记录|接种证|既往剂次|是否漏种|核对.*剂次/.test(advice) && !hasExplicitUncertainDose(vaccineName);
   });
   if (recordOnlyConfirmation) issues.push('建议确认表仍用于核对接种记录');
+  const allActionNames = [...suggested, ...catchup, ...evaluated];
+  const omittedNip = expectedUnmentionedNip(safetyContext.ageYears)
+    .filter(([, alias]) => !allActionNames.some(name => alias.test(name)))
+    .map(([name]) => name);
+  if (omittedNip.length) issues.push(`未覆盖按未接种处理的适龄疫苗：${omittedNip.join('、')}`);
   if (explicitVaccinated().some(item => [...suggested, ...catchup].some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种或补种');
   const evaluationSection = getSection(answer, '建议确认');
   if (safetyContext.ruleMode === 'acute' && !/暂缓|待退热|病情稳定后|恢复后再/.test(evaluationSection)) issues.push('急性中重度病例未提示暂缓');
