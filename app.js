@@ -125,6 +125,21 @@ function normalizeEmptyDecisionTables(answer) {
   return normalized;
 }
 
+function normalizeIntroSections(answer) {
+  let normalized = answer
+    .replace(/^(#{1,4})\s*结论摘要\s*$/m, '$1 一句话结论')
+    .replace(/^(#{1,4})\s*(?:病例摘要|基本情况|患儿情况)\s*$/m, '$1 孩子目前情况');
+  const additions = [];
+  if (!sectionPattern('一句话结论').test(normalized)) {
+    additions.push('### 一句话结论\n请查看下方按“现在建议接种、暂缓或接种前需评估、目前不用接种”整理的疫苗建议。');
+  }
+  if (!sectionPattern('孩子目前情况').test(normalized)) {
+    additions.push('### 孩子目前情况\n已根据填写的年龄、当前健康状态、用药治疗和接种记录进行整理。');
+  }
+  if (additions.length) normalized = `${additions.join('\n\n')}\n\n${normalized}`;
+  return normalized;
+}
+
 function normalizeDeterministicGrouping(answer, safetyContext) {
   if (safetyContext.ageYears === null) return answer;
 
@@ -379,7 +394,7 @@ form.addEventListener('submit', async event => {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
         const answer = normalizeDeterministicGrouping(
-          normalizeEmptyDecisionTables(await runWorkflow(caseInfo)),
+          normalizeEmptyDecisionTables(normalizeIntroSections(await runWorkflow(caseInfo))),
           safetyContext,
         );
         validationIssues = validateAnswer(answer, safetyContext);
