@@ -274,7 +274,12 @@ function ensureExpectedNipCoverage(answer, safetyContext) {
   ].map(cells => cells[0] || '');
   const missing = expected.filter(([name, alias]) => movedNames.has(name) || !presentNames.some(item => alias.test(item)));
   if (normalStable) {
-    const rows = missing.map(([name]) => `| ${name} | 建议补种 | 未在接种记录中提及，按未接种处理；按补种程序补齐适龄剂次 |`);
+    const rows = missing.map(([name, alias]) => {
+      const reason = vaccineRecordSegment(alias).trim()
+        ? '接种记录明确未完成；按补种程序补齐适龄剂次'
+        : '未在接种记录中提及，按未接种处理；按补种程序补齐适龄剂次';
+      return `| ${name} | 建议补种 | ${reason} |`;
+    });
     insertRowsIntoTable(lines, '建议补种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', rows);
   } else if (safetyContext.ruleMode === 'acute') {
     const rows = missing.map(([name]) => `| ${name} | 暂缓，待退热且病情稳定后再评估补种 |`);
