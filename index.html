@@ -28,44 +28,14 @@
           <input id="age" name="age" type="text" required maxlength="30" placeholder="例如：4岁6个月">
         </label>
 
-        <label class="field">
-          <span>性别</span>
-          <select id="sex" name="sex">
-            <option value="未知">请选择</option>
-            <option value="男">男</option>
-            <option value="女">女</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>当前体温 <b>*</b></span>
-          <input id="temperature" name="temperature" type="text" required maxlength="30" placeholder="例如：36.8℃；未测请写未知">
-        </label>
-
-        <label class="field">
-          <span>目前身体状态 <b>*</b></span>
-          <select id="illness-status" name="illness-status" required>
-            <option value="" selected disabled>请选择</option>
-            <option value="稳定或恢复期，无明显不适">稳定或恢复期，无明显不适</option>
-            <option value="轻微不适，精神状态正常">轻微不适，精神状态正常</option>
-            <option value="中度或重度急性不适，病情尚未恢复">中重度不适，病情未恢复</option>
-            <option value="不清楚">不清楚</option>
-          </select>
-        </label>
-
         <label class="field full">
-          <span>主要疾病和目前情况 <b>*</b></span>
-          <input id="condition" name="condition" type="text" required maxlength="300" placeholder="例如：特应性皮炎，目前病情稳定">
+          <span>当前健康情况 <b>*</b></span>
+          <input id="condition" name="condition" type="text" required maxlength="400" placeholder="例如：特应性皮炎稳定，无发热，精神正常">
         </label>
 
         <label class="field full">
           <span>近期用药或治疗</span>
-          <input id="treatment" name="treatment" type="text" maxlength="300" placeholder="没有请填写“无”；请写药名、剂量和日期">
-        </label>
-
-        <label class="field full">
-          <span>用药或治疗原因</span>
-          <input id="treatment-reason" name="treatment-reason" type="text" maxlength="300" placeholder="例如：支原体感染恢复期；不清楚请填写“未知”">
+          <input id="treatment" name="treatment" type="text" maxlength="400" placeholder="例如：正在口服阿奇霉素；没有请填写“无”">
         </label>
 
         <label class="field full">
@@ -74,13 +44,8 @@
         </label>
 
         <label class="field full">
-          <span>严重过敏或接种后严重反应</span>
-          <input id="reaction" name="reaction" type="text" maxlength="300" placeholder="没有请填写“无”">
-        </label>
-
-        <label class="field full">
           <span>其他</span>
-          <input id="other" name="other" type="text" maxlength="500" placeholder="可填写近期发热、血液制品使用等补充信息">
+          <input id="other" name="other" type="text" maxlength="500" placeholder="可填写严重过敏、接种后严重反应、血液制品使用等">
         </label>
       </div>
 
@@ -98,6 +63,6 @@
 
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
-  <script src="app.js?v=20260822-3"></script>
+  <script src="app.js?v=20260822-4"></script>
 </body>
 </html>
