@@ -126,6 +126,66 @@ function explicitVaccinated() {
   }).filter(item => item.vaccinated);
 }
 
+function explicitMissing() {
+  const record = value('vaccination', '');
+  return vaccineAliases.map(([name, alias]) => {
+    const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
+    return { name, alias, missing: /未接种|没接种|未种|漏种/.test(segment) };
+  }).filter(item => item.missing);
+}
+
+function insertRowsIntoTable(lines, sectionName, header, emptyRow, rows) {
+  const headingIndex = lines.findIndex(line => new RegExp(`^#{1,4}\\s+${sectionName}\\s*$`).test(line.trim()));
+  if (headingIndex < 0) return;
+  const headerIndex = lines.findIndex((line, index) => index > headingIndex && line.trim() === header);
+  if (headerIndex < 0) return;
+  if (lines[headerIndex + 2]?.trim() === emptyRow) lines.splice(headerIndex + 2, 1);
+  let tableEnd = headerIndex + 2;
+  while (tableEnd < lines.length && /^\|.+\|$/.test(lines[tableEnd].trim())) tableEnd += 1;
+  if (rows.length) lines.splice(tableEnd, 0, ...rows);
+  if (!/^\|.+\|$/.test(lines[headerIndex + 2]?.trim() || '')) lines.splice(headerIndex + 2, 0, emptyRow);
+}
+
+function normalizeActionGrouping(answer) {
+  const missing = explicitMissing();
+  const moved = [];
+  let section = '';
+  let lines = answer.split(/\r?\n/).filter(line => {
+    const heading = line.trim().match(/^#{1,4}\s+(.+)/);
+    if (heading) section = heading[1].trim();
+    const isRow = /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
+    if (section === '建议接种' && isRow) {
+      const cells = tableCells(line);
+      if (missing.some(item => item.alias.test(cells[0] || ''))) {
+        moved.push(`| ${cells[0]} | 建议补种 | ${cells[2] || '接种记录显示未接种'} |`);
+        return false;
+      }
+    }
+    return true;
+  });
+  insertRowsIntoTable(lines, '建议接种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', []);
+  insertRowsIntoTable(lines, '建议补种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', moved);
+
+  const interim = lines.join('\n');
+  const activeNames = [
+    ...tableRows(getSection(interim, '建议接种')),
+    ...tableRows(getSection(interim, '建议补种')),
+  ].map(cells => cells[0] || '');
+  section = '';
+  lines = lines.filter(line => {
+    const heading = line.trim().match(/^#{1,4}\s+(.+)/);
+    if (heading) section = heading[1].trim();
+    const isRow = /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
+    if (section === '建议确认' && isRow) {
+      const name = tableCells(line)[0] || '';
+      return !vaccineAliases.some(([, alias]) => alias.test(name) && activeNames.some(active => alias.test(active)));
+    }
+    return true;
+  });
+  insertRowsIntoTable(lines, '建议确认', '| 疫苗 | 需要确认 |', '| 暂无 | — |', []);
+  return lines.join('\n');
+}
+
 function normalizeVaccinatedGrouping(answer) {
   const vaccinated = explicitVaccinated();
   if (!vaccinated.length) return answer;
@@ -181,6 +241,8 @@ function validateAnswer(answer, safetyContext) {
   const evaluated = evaluatedRows.map(cells => cells[0]).filter(name => name && name !== '暂无');
   const duplicates = [...suggested, ...catchup, ...evaluated].filter((name, index, all) => all.indexOf(name) !== index);
   if (duplicates.length) issues.push(`疫苗重复分组：${[...new Set(duplicates)].join('、')}`);
+  const aliasDuplicate = vaccineAliases.some(([, alias]) => [suggested, catchup, evaluated].filter(group => group.some(name => alias.test(name))).length > 1);
+  if (aliasDuplicate) issues.push('同一疫苗出现在多个建议中');
   if (suggestedRows.some(cells => /已接种|已完成|核对|确认|暂缓/.test(cells.join(' ')))) issues.push('建议接种表包含已接种或待确认项目');
   if (explicitVaccinated().some(item => [...suggested, ...catchup].some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种或补种');
   const evaluationSection = getSection(answer, '建议确认');
@@ -293,7 +355,7 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = normalizeVaccinatedGrouping(normalizeSections(await runWorkflow(buildCaseInfo())));
+        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeSections(await runWorkflow(buildCaseInfo()))));
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
