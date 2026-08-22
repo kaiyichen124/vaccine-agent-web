@@ -45,6 +45,7 @@ function getSafetyContext() {
 function buildCaseInfo() {
   return [
     getSafetyContext().text,
+    '接种记录解释规则（必须执行）：用户提到的疫苗，如未明确写明“未接种、未完成、漏种、仅接种若干剂或剂次不清”，一律视为已完成截至当前年龄的全部剂次，不再推荐；未提到的疫苗一律视为从未接种，必须结合年龄和健康情况直接归入建议接种、建议补种或因医学原因暂缓，不得放入建议确认要求核对记录。建议确认只用于确实影响接种的疾病、治疗、过敏或明确写出的剂次不清。',
     `年龄：${value('age', '未知')}`,
     `当前健康情况：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment')}`,
@@ -170,23 +171,45 @@ const vaccineAliases = [
   ['肠道病毒71型疫苗', /肠道病毒71|EV71/i], ['人乳头瘤病毒疫苗', /人乳头瘤|HPV/i],
 ];
 
+const catchupEligibleVaccine = /乙肝疫苗|卡介苗|脊灰疫苗|百白破疫苗|麻腮风疫苗|乙脑疫苗|流脑疫苗|甲肝疫苗|人乳头瘤病毒疫苗/;
+
+function vaccineRecordSegment(alias) {
+  return value('vaccination', '').split(/[；;。\n]/).find(part => alias.test(part)) || '';
+}
+
+function recordException(segment) {
+  return /未接种|没接种|未种|漏种|未完成|未全程|剂次不清|剂次不详|不清楚|未知|记不清|仅(?:接种)?\s*\d+\s*剂|只(?:接种)?\s*\d+\s*剂/.test(segment);
+}
+
 function explicitVaccinated() {
   const record = value('vaccination', '');
+  const allNipComplete = /(?:已完成|全程).{0,8}(?:国家免疫规划|免疫规划疫苗)|(?:国家免疫规划|免疫规划疫苗).{0,8}(?:已完成|全程)/.test(record);
   return vaccineAliases.map(([name, alias]) => {
-    const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
-    const vaccinated = !/未接种|没接种|未种/.test(segment) && /已接种|接种过|已完成|全程|\d+剂/.test(segment);
-    const complete = /已完成|全程/.test(segment) || (/乙肝/.test(segment) && /3剂/.test(segment));
+    const segment = vaccineRecordSegment(alias);
+    const genericComplete = allNipComplete && catchupEligibleVaccine.test(name);
+    const vaccinated = genericComplete || (Boolean(segment.trim()) && !recordException(segment));
+    const complete = vaccinated;
     return { name, alias, vaccinated, complete };
   }).filter(item => item.vaccinated);
 }
 
 function explicitMissing() {
-  const record = value('vaccination', '');
-  const catchupEligible = /乙肝疫苗|卡介苗|脊灰疫苗|百白破疫苗|麻腮风疫苗|乙脑疫苗|流脑疫苗|甲肝疫苗|人乳头瘤病毒疫苗/;
   return vaccineAliases.map(([name, alias]) => {
-    const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
-    return { name, alias, missing: catchupEligible.test(name) && /未接种|没接种|未种|漏种/.test(segment) };
+    const segment = vaccineRecordSegment(alias);
+    return { name, alias, missing: catchupEligibleVaccine.test(name) && /未接种|没接种|未种|漏种|未完成|未全程|仅(?:接种)?\s*\d+\s*剂|只(?:接种)?\s*\d+\s*剂/.test(segment) };
   }).filter(item => item.missing);
+}
+
+function hasExplicitUncertainDose(vaccineName) {
+  const match = vaccineAliases.find(([, alias]) => alias.test(vaccineName));
+  if (!match) return false;
+  return /剂次不清|剂次不详|不清楚|未知|记不清/.test(vaccineRecordSegment(match[1]));
+}
+
+function ensureDoseCheckNote(answer) {
+  const note = '提示：建议携带接种证核对已接种疫苗的实际剂次。';
+  const cleaned = answer.replace(/^.*建议.*核对已接种疫苗.*剂次.*$/gm, '').trim();
+  return `${cleaned}\n\n${note}`;
 }
 
 function insertRowsIntoTable(lines, sectionName, header, emptyRow, rows) {
@@ -324,6 +347,12 @@ function validateAnswer(answer, safetyContext) {
     return status !== '—' && !/^建议补种/.test(status);
   });
   if (invalidCatchup) issues.push('建议补种表包含非补种状态');
+  const recordOnlyConfirmation = evaluatedRows.some(cells => {
+    const vaccineName = cells[0] || '';
+    const advice = cells.slice(1).join(' ');
+    return /接种记录|接种证|既往剂次|是否漏种|核对.*剂次/.test(advice) && !hasExplicitUncertainDose(vaccineName);
+  });
+  if (recordOnlyConfirmation) issues.push('建议确认表仍用于核对接种记录');
   if (explicitVaccinated().some(item => [...suggested, ...catchup].some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种或补种');
   const evaluationSection = getSection(answer, '建议确认');
   if (safetyContext.ruleMode === 'acute' && !/暂缓|待退热|病情稳定后|恢复后再/.test(evaluationSection)) issues.push('急性中重度病例未提示暂缓');
@@ -441,7 +470,7 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext);
+        const answer = ensureDoseCheckNote(normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext));
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
