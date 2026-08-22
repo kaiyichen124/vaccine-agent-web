@@ -66,12 +66,13 @@ function tableCells(line) {
   return line.replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
 }
 
-const requiredSections = ['结论', '建议接种', '暂缓或需要确认', '下一步', '来源与版本'];
+const requiredSections = ['结论', '建议接种', '建议补种', '建议确认', '下一步', '依据'];
 const decisionTables = [
-  { section: '建议接种', header: '| 疫苗 | 建议 | 主要原因 |', separator: '|---|---|---|', emptyRow: '| 暂无 | — | — |' },
-  { section: '暂缓或需要确认', header: '| 疫苗 | 当前处理 | 需要确认什么 |', separator: '|---|---|---|', emptyRow: '| 暂无 | — | — |' },
+  { section: '建议接种', header: '| 疫苗 | 建议 | 原因 |', separator: '|---|---|---|', emptyRow: '| 暂无 | — | — |' },
+  { section: '建议补种', header: '| 疫苗 | 建议 | 原因 |', separator: '|---|---|---|', emptyRow: '| 暂无 | — | — |' },
+  { section: '建议确认', header: '| 疫苗 | 需要确认 |', separator: '|---|---|', emptyRow: '| 暂无 | — |' },
 ];
-const sourceHeader = '| 支撑内容 | 正式文献（发布机构，年份） | 章节/页码 | 原文链接或标识 | 核验日期 |';
+const sourceHeader = '| 主要依据 | 发布机构与年份 |';
 
 function sectionPattern(name) {
   return new RegExp(`(#{1,4}\\s*${name}\\s*\\n)([\\s\\S]*?)(?=\\n#{1,4}\\s|$)`);
@@ -91,8 +92,9 @@ function normalizeSections(answer) {
   let normalized = answer
     .replace(/^(#{1,4})\s*(?:一句话结论|结论摘要)\s*$/m, '$1 结论')
     .replace(/^(#{1,4})\s*(?:现在建议接种|疫苗推荐列表)\s*$/m, '$1 建议接种')
-    .replace(/^(#{1,4})\s*(?:暂缓或接种前需评估|需要确认)\s*$/m, '$1 暂缓或需要确认')
-    .replace(/^(#{1,4})\s*下一步怎么做\s*$/m, '$1 下一步');
+    .replace(/^(#{1,4})\s*(?:暂缓或接种前需评估|暂缓或需要确认|需要确认)\s*$/m, '$1 建议确认')
+    .replace(/^(#{1,4})\s*下一步怎么做\s*$/m, '$1 下一步')
+    .replace(/^(#{1,4})\s*来源与版本\s*$/m, '$1 依据');
   if (!sectionPattern('结论').test(normalized)) normalized = `### 结论\n请查看下方需要处理的疫苗。\n\n${normalized}`;
   for (const table of decisionTables) {
     normalized = normalized.replace(sectionPattern(table.section), (whole, heading, body) => {
@@ -135,14 +137,14 @@ function normalizeVaccinatedGrouping(answer) {
   for (const line of lines) {
     const heading = line.trim().match(/^#{1,4}\s+(.+)/);
     if (heading) section = heading[1].trim();
-    const isDataRow = (section === '建议接种' || section === '暂缓或需要确认') && /^\|.+\|$/.test(line.trim())
+    const isDataRow = (section === '建议接种' || section === '建议补种' || section === '建议确认') && /^\|.+\|$/.test(line.trim())
       && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
     if (isDataRow) {
       const vaccineName = tableCells(line)[0] || '';
       const match = vaccinated.find(item => item.alias.test(vaccineName));
       if (match) {
         if (!match.complete && !handledConfirm.has(match.name)) {
-          addToConfirm.push(`| ${match.name} | 核对记录 | 确认已接种剂次；完成程序则无需再种 |`);
+          addToConfirm.push(`| ${match.name} | 核对已接种剂次；完成程序则无需再种 |`);
           handledConfirm.add(match.name);
         }
         continue;
@@ -150,13 +152,13 @@ function normalizeVaccinatedGrouping(answer) {
     }
     filtered.push(line);
   }
-  const headingIndex = filtered.findIndex(line => /^#{1,4}\s+暂缓或需要确认\s*$/.test(line.trim()));
+  const headingIndex = filtered.findIndex(line => /^#{1,4}\s+建议确认\s*$/.test(line.trim()));
   if (headingIndex >= 0 && addToConfirm.length) {
-    const existing = getSection(filtered.join('\n'), '暂缓或需要确认');
+    const existing = getSection(filtered.join('\n'), '建议确认');
     const rows = addToConfirm.filter(row => !existing.includes(tableCells(row)[0]));
-    const headerIndex = filtered.findIndex((line, index) => index > headingIndex && line.trim() === '| 疫苗 | 当前处理 | 需要确认什么 |');
+    const headerIndex = filtered.findIndex((line, index) => index > headingIndex && line.trim() === '| 疫苗 | 需要确认 |');
     if (headerIndex >= 0) {
-      if (filtered[headerIndex + 2]?.trim() === '| 暂无 | — | — |') filtered.splice(headerIndex + 2, 1);
+      if (filtered[headerIndex + 2]?.trim() === '| 暂无 | — |') filtered.splice(headerIndex + 2, 1);
       let tableEnd = headerIndex + 2;
       while (tableEnd < filtered.length && /^\|.+\|$/.test(filtered[tableEnd].trim())) tableEnd += 1;
       filtered.splice(tableEnd, 0, ...rows);
@@ -170,16 +172,18 @@ function validateAnswer(answer, safetyContext) {
   if (!answer || answer.trim().length < 220) issues.push('结果为空或不完整');
   for (const section of requiredSections) if (!sectionPattern(section).test(answer)) issues.push(`缺少章节：${section}`);
   for (const table of decisionTables) if (!getSection(answer, table.section).includes(table.header)) issues.push(`缺少表头：${table.section}`);
-  if (!getSection(answer, '来源与版本').includes(sourceHeader)) issues.push('缺少来源表头');
+  if (!getSection(answer, '依据').includes(sourceHeader)) issues.push('缺少依据表头');
   const suggestedRows = tableRows(getSection(answer, '建议接种'));
-  const evaluatedRows = tableRows(getSection(answer, '暂缓或需要确认'));
+  const catchupRows = tableRows(getSection(answer, '建议补种'));
+  const evaluatedRows = tableRows(getSection(answer, '建议确认'));
   const suggested = suggestedRows.map(cells => cells[0]).filter(name => name && name !== '暂无');
+  const catchup = catchupRows.map(cells => cells[0]).filter(name => name && name !== '暂无');
   const evaluated = evaluatedRows.map(cells => cells[0]).filter(name => name && name !== '暂无');
-  const duplicates = [...suggested, ...evaluated].filter((name, index, all) => all.indexOf(name) !== index);
+  const duplicates = [...suggested, ...catchup, ...evaluated].filter((name, index, all) => all.indexOf(name) !== index);
   if (duplicates.length) issues.push(`疫苗重复分组：${[...new Set(duplicates)].join('、')}`);
   if (suggestedRows.some(cells => /已接种|已完成|核对|确认|暂缓/.test(cells.join(' ')))) issues.push('建议接种表包含已接种或待确认项目');
-  if (explicitVaccinated().some(item => suggested.some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种');
-  const evaluationSection = getSection(answer, '暂缓或需要确认');
+  if (explicitVaccinated().some(item => [...suggested, ...catchup].some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种或补种');
+  const evaluationSection = getSection(answer, '建议确认');
   if (safetyContext.ruleMode === 'acute' && !/暂缓/.test(evaluationSection)) issues.push('急性中重度病例未提示暂缓');
   if (safetyContext.ruleMode === 'stable' && safetyContext.usesAntimicrobial
     && /(?:阿奇霉素|抗菌药|抗生素)[^\n]{0,80}暂缓|暂缓[^\n]{0,80}(?:阿奇霉素|抗菌药|抗生素)/.test(evaluationSection)) issues.push('错误地因抗菌药物暂缓');
