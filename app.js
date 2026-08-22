@@ -91,10 +91,11 @@ function tableRows(section) {
 function normalizeSections(answer) {
   let normalized = answer
     .replace(/^(#{1,4})\s*(?:一句话结论|结论摘要)\s*$/m, '$1 结论')
-    .replace(/^(#{1,4})\s*(?:现在建议接种|疫苗推荐列表)\s*$/m, '$1 建议接种')
-    .replace(/^(#{1,4})\s*(?:暂缓或接种前需评估|暂缓或需要确认|需要确认)\s*$/m, '$1 建议确认')
-    .replace(/^(#{1,4})\s*下一步怎么做\s*$/m, '$1 下一步')
-    .replace(/^(#{1,4})\s*来源与版本\s*$/m, '$1 依据');
+    .replace(/^(#{1,4})\s*(?:现在建议接种|推荐接种|现在可接种|疫苗推荐列表)\s*$/m, '$1 建议接种')
+    .replace(/^(#{1,4})\s*(?:补种建议|需要补种|推荐补种)\s*$/m, '$1 建议补种')
+    .replace(/^(#{1,4})\s*(?:暂缓或接种前需评估|暂缓或需要确认|需要确认|接种前确认|接种前评估)\s*$/m, '$1 建议确认')
+    .replace(/^(#{1,4})\s*(?:下一步怎么做|处理建议|行动建议)\s*$/m, '$1 下一步')
+    .replace(/^(#{1,4})\s*(?:来源与版本|参考依据|参考资料|主要依据)\s*$/m, '$1 依据');
   if (!sectionPattern('结论').test(normalized)) normalized = `### 结论\n请查看下方需要处理的疫苗。\n\n${normalized}`;
   for (const table of decisionTables) {
     normalized = normalized.replace(sectionPattern(table.section), (whole, heading, body) => {
@@ -105,6 +106,49 @@ function normalizeSections(answer) {
       return whole;
     });
   }
+  return normalized;
+}
+
+function normalizeTableHeaders(answer) {
+  let normalized = answer;
+  for (const table of decisionTables) {
+    normalized = normalized.replace(sectionPattern(table.section), (whole, heading, body) => {
+      const lines = body.split(/\r?\n/);
+      const headerIndex = lines.findIndex((line, index) => /^\|.+\|$/.test(line.trim())
+        && /^\|[-:|\s]+\|$/.test((lines[index + 1] || '').trim()));
+      if (headerIndex < 0) return whole;
+      const headerCells = tableCells(lines[headerIndex]);
+      if (!/疫苗/.test(headerCells[0] || '')) return whole;
+      lines[headerIndex] = table.header;
+      lines[headerIndex + 1] = table.separator;
+      let rowIndex = headerIndex + 2;
+      while (rowIndex < lines.length && /^\|.+\|$/.test(lines[rowIndex].trim())) {
+        const cells = tableCells(lines[rowIndex]);
+        if (table.section !== '建议确认' && cells.length >= 4) {
+          lines[rowIndex] = `| ${cells[0]} | ${cells[2]} | ${cells.slice(3).join('；')} |`;
+        } else if (table.section === '建议确认' && cells.length >= 3) {
+          lines[rowIndex] = `| ${cells[0]} | ${cells.slice(1).join('；')} |`;
+        }
+        rowIndex += 1;
+      }
+      return `${heading}${lines.join('\n')}`;
+    });
+  }
+  normalized = normalized.replace(sectionPattern('依据'), (whole, heading, body) => {
+    const lines = body.split(/\r?\n/);
+    const headerIndex = lines.findIndex((line, index) => /^\|.+\|$/.test(line.trim())
+      && /^\|[-:|\s]+\|$/.test((lines[index + 1] || '').trim()));
+    if (headerIndex < 0) return whole;
+    lines[headerIndex] = sourceHeader;
+    lines[headerIndex + 1] = '|---|---|';
+    let rowIndex = headerIndex + 2;
+    while (rowIndex < lines.length && /^\|.+\|$/.test(lines[rowIndex].trim())) {
+      const cells = tableCells(lines[rowIndex]);
+      if (cells.length > 2) lines[rowIndex] = `| ${cells[1] || cells[0]} | — |`;
+      rowIndex += 1;
+    }
+    return `${heading}${lines.join('\n')}`;
+  });
   return normalized;
 }
 
@@ -245,13 +289,29 @@ function validateAnswer(answer, safetyContext) {
   if (duplicates.length) issues.push(`疫苗重复分组：${[...new Set(duplicates)].join('、')}`);
   const aliasDuplicate = vaccineAliases.some(([, alias]) => [suggested, catchup, evaluated].filter(group => group.some(name => alias.test(name))).length > 1);
   if (aliasDuplicate) issues.push('同一疫苗出现在多个建议中');
-  if (suggestedRows.some(cells => /已接种|已完成|核对|确认|暂缓/.test(cells.join(' ')))) issues.push('建议接种表包含已接种或待确认项目');
+  const invalidSuggested = suggestedRows.some(cells => {
+    const status = cells[1] || '';
+    return /^(?:已接种|已完成|核对|确认|需确认|建议确认|暂缓)/.test(status)
+      || /暂缓接种|接种前需评估/.test(status);
+  });
+  if (invalidSuggested) issues.push('建议接种表包含非接种状态');
+  const invalidCatchup = catchupRows.some(cells => {
+    const status = cells[1] || '';
+    return status !== '—' && !/^建议补种/.test(status);
+  });
+  if (invalidCatchup) issues.push('建议补种表包含非补种状态');
   if (explicitVaccinated().some(item => [...suggested, ...catchup].some(name => item.alias.test(name)))) issues.push('已接种疫苗仍被列为建议接种或补种');
   const evaluationSection = getSection(answer, '建议确认');
-  if (safetyContext.ruleMode === 'acute' && !/暂缓/.test(evaluationSection)) issues.push('急性中重度病例未提示暂缓');
-  if (safetyContext.ruleMode === 'stable' && safetyContext.usesAntimicrobial
-    && /(?:阿奇霉素|抗菌药|抗生素)[^\n]{0,80}暂缓|暂缓[^\n]{0,80}(?:阿奇霉素|抗菌药|抗生素)/.test(evaluationSection)) issues.push('错误地因抗菌药物暂缓');
-  if (answer.length > 2200) issues.push('结果过长');
+  if (safetyContext.ruleMode === 'acute' && !/暂缓|待退热|病情稳定后|恢复后再/.test(evaluationSection)) issues.push('急性中重度病例未提示暂缓');
+  const antimicrobialDeferral = evaluatedRows.some(cells => {
+    const advice = cells.slice(1).join(' ');
+    return /阿奇霉素|抗菌药|抗生素/.test(advice)
+      && /暂缓|延期|待停药/.test(advice)
+      && !/本身不|不因|无需因|不构成/.test(advice);
+  });
+  if (safetyContext.ruleMode === 'stable' && safetyContext.usesAntimicrobial && antimicrobialDeferral) issues.push('错误地因抗菌药物暂缓');
+  const visibleLength = answer.replace(/https?:\/\/[^\s|]+/g, '链接').length;
+  if (visibleLength > 2200) issues.push('结果过长');
   return issues;
 }
 
@@ -357,7 +417,7 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeSections(await runWorkflow(buildCaseInfo()))));
+        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))));
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
