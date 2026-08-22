@@ -125,6 +125,54 @@ function normalizeEmptyDecisionTables(answer) {
   return normalized;
 }
 
+function normalizeDeterministicGrouping(answer, safetyContext) {
+  if (safetyContext.ageYears === null) return answer;
+
+  const lines = answer.split(/\r?\n/);
+  let currentSection = '';
+  const movedToNotNeeded = [];
+  const filtered = [];
+
+  for (const line of lines) {
+    const heading = line.trim().match(/^#{1,4}\s+(.+)/);
+    if (heading) currentSection = heading[1].trim();
+
+    const isActiveTable = currentSection === '现在建议接种' || currentSection === '暂缓或接种前需评估';
+    const isDataRow = /^\|.+\|$/.test(line.trim())
+      && !/^\|[-:|\s]+\|$/.test(line.trim())
+      && !/疫苗名称/.test(line);
+    if (isActiveTable && isDataRow) {
+      const cells = tableCells(line.trim());
+      const vaccineName = cells[0] || '';
+      const scheduledAge = vaccineName.match(/(\d+(?:\.\d+)?)\s*(?:周岁|岁)(?:剂次)?/);
+      const isFutureDose = scheduledAge && Number(scheduledAge[1]) > safetyContext.ageYears;
+      const isAgeInapplicableRota = safetyContext.ageYears >= 4 && /轮状病毒/.test(vaccineName);
+      if (isFutureDose || isAgeInapplicableRota) {
+        movedToNotNeeded.push([
+          vaccineName,
+          isFutureDose ? `尚未到接种时间（${scheduledAge[1]}岁）` : '当前年龄已超过常用产品接种年龄范围',
+        ]);
+        continue;
+      }
+    }
+    filtered.push(line);
+  }
+
+  if (!movedToNotNeeded.length) return filtered.join('\n');
+
+  let notNeededHeading = filtered.findIndex(line => /^#{1,4}\s+目前不用接种\s*$/.test(line.trim()));
+  if (notNeededHeading < 0) return filtered.join('\n');
+  let insertAt = notNeededHeading + 1;
+  while (insertAt < filtered.length && !/^#{1,4}\s+/.test(filtered[insertAt].trim())) insertAt += 1;
+
+  const existingNames = new Set(firstColumnValues(getSection(filtered.join('\n'), '目前不用接种')));
+  const rows = movedToNotNeeded
+    .filter(([name]) => !existingNames.has(name))
+    .map(([name, reason]) => `| ${name} | ${reason} |`);
+  filtered.splice(insertAt, 0, ...rows);
+  return filtered.join('\n');
+}
+
 function getSection(answer, name) {
   return answer.match(sectionPattern(name))?.[2] || '';
 }
@@ -330,7 +378,10 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = normalizeEmptyDecisionTables(await runWorkflow(caseInfo));
+        const answer = normalizeDeterministicGrouping(
+          normalizeEmptyDecisionTables(await runWorkflow(caseInfo)),
+          safetyContext,
+        );
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) {
           validAnswer = answer;
