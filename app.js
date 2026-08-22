@@ -125,13 +125,15 @@ function getSection(answer, name) {
   return answer.match(sectionPattern(name))?.[2] || '';
 }
 
-function firstColumnValues(section) {
+function tableRows(section) {
   return section.split(/\r?\n/)
     .filter(line => /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()))
-    .map(tableCells)
-    .slice(1)
-    .map(cells => cells[0])
-    .filter(Boolean);
+    .map(line => tableCells(line.trim()))
+    .slice(1);
+}
+
+function firstColumnValues(section) {
+  return tableRows(section).map(cells => cells[0]).filter(Boolean);
 }
 
 function validateAnswer(answer, safetyContext) {
@@ -152,6 +154,20 @@ function validateAnswer(answer, safetyContext) {
   if (duplicates.length) issues.push(`疫苗重复分组：${[...new Set(duplicates)].join('、')}`);
 
   const evaluationSection = getSection(answer, '暂缓或接种前需评估');
+  const suggestedSection = getSection(answer, '现在建议接种');
+  const notNeededSection = getSection(answer, '目前不用接种');
+  const invalidSuggested = tableRows(suggestedSection).some(cells => /接种前需评估|暂缓接种|尚未到接种时间|当前年龄不适用|已完成/.test(cells[2] || ''));
+  if (invalidSuggested) {
+    issues.push('“现在建议接种”包含错误状态');
+  }
+  const invalidEvaluation = tableRows(evaluationSection).some(cells => !/^(暂缓接种|接种前需评估|—)$/.test(cells[1] || ''));
+  if (invalidEvaluation) {
+    issues.push('评估表包含不允许的状态');
+  }
+  const invalidNotNeeded = tableRows(notNeededSection).some(cells => /建议接种|建议补种|暂缓接种|接种前需评估/.test(cells.slice(1).join(' ')));
+  if (invalidNotNeeded) {
+    issues.push('“目前不用接种”包含错误状态');
+  }
   if (safetyContext.ruleMode === 'acute' && !/暂缓接种/.test(evaluationSection)) issues.push('急性中重度病例未暂缓');
   if (safetyContext.ruleMode === 'stable' && safetyContext.usesAntimicrobial
     && /(?:阿奇霉素|抗菌药|抗生素)[^\n]{0,100}暂缓|暂缓[^\n]{0,100}(?:阿奇霉素|抗菌药|抗生素)/.test(evaluationSection)) {
