@@ -37,6 +37,22 @@
           </select>
         </label>
 
+        <label class="field">
+          <span>当前体温 <b>*</b></span>
+          <input id="temperature" name="temperature" type="text" required maxlength="30" placeholder="例如：36.8℃；未测请写未知">
+        </label>
+
+        <label class="field">
+          <span>目前身体状态 <b>*</b></span>
+          <select id="illness-status" name="illness-status" required>
+            <option value="" selected disabled>请选择</option>
+            <option value="稳定或恢复期，无明显不适">稳定或恢复期，无明显不适</option>
+            <option value="轻微不适，精神状态正常">轻微不适，精神状态正常</option>
+            <option value="中度或重度急性不适，病情尚未恢复">中重度不适，病情未恢复</option>
+            <option value="不清楚">不清楚</option>
+          </select>
+        </label>
+
         <label class="field full">
           <span>主要疾病和目前情况 <b>*</b></span>
           <input id="condition" name="condition" type="text" required maxlength="300" placeholder="例如：特应性皮炎，目前病情稳定">
@@ -45,6 +61,11 @@
         <label class="field full">
           <span>近期用药或治疗</span>
           <input id="treatment" name="treatment" type="text" maxlength="300" placeholder="没有请填写“无”；请写药名、剂量和日期">
+        </label>
+
+        <label class="field full">
+          <span>用药或治疗原因</span>
+          <input id="treatment-reason" name="treatment-reason" type="text" maxlength="300" placeholder="例如：支原体感染恢复期；不清楚请填写“未知”">
         </label>
 
         <label class="field full">
