@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="填写儿童健康与接种情况，生成疫苗推荐列表。">
+  <title>儿童疫苗推荐助手</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23168b78%22/><text x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-size=%2234%22 fill=%22white%22>苗</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="intro">
+      <div class="brand-mark" aria-hidden="true">苗</div>
+      <div>
+        <h1>儿童疫苗推荐助手</h1>
+        <p>请填写孩子目前的健康和接种情况，提交后生成疫苗建议。结果请由预防接种专业人员审核。</p>
+      </div>
+    </section>
+
+    <form id="case-form" class="case-card">
+      <h2>填写孩子情况</h2>
+      <p class="required-note"><span>*</span> 为必填项</p>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>年龄 <b>*</b></span>
+          <input id="age" name="age" type="text" required maxlength="30" placeholder="例如：4岁6个月">
+        </label>
+
+        <label class="field">
+          <span>性别</span>
+          <select id="sex" name="sex">
+            <option value="未知">请选择</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+          </select>
+        </label>
+
+        <label class="field full">
+          <span>主要疾病和目前情况 <b>*</b></span>
+          <input id="condition" name="condition" type="text" required maxlength="300" placeholder="例如：特应性皮炎，目前病情稳定">
+        </label>
+
+        <label class="field full">
+          <span>近期用药或治疗</span>
+          <input id="treatment" name="treatment" type="text" maxlength="300" placeholder="没有请填写“无”；请写药名、剂量和日期">
+        </label>
+
+        <label class="field full">
+          <span>接种记录 <b>*</b></span>
+          <input id="vaccination" name="vaccination" type="text" required maxlength="600" placeholder="例如：已完成3岁前国家免疫规划疫苗；不清楚请填写“未知”">
+        </label>
+
+        <label class="field full">
+          <span>严重过敏或接种后严重反应</span>
+          <input id="reaction" name="reaction" type="text" maxlength="300" placeholder="没有请填写“无”">
+        </label>
+
+        <label class="field full">
+          <span>其他</span>
+          <input id="other" name="other" type="text" maxlength="500" placeholder="可填写近期发热、血液制品使用等补充信息">
+        </label>
+      </div>
+
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <button id="submit-button" class="submit-button" type="submit">生成疫苗推荐列表</button>
+    </form>
+
+    <section id="result-card" class="result-card" hidden aria-live="polite">
+      <div class="result-title-row">
+        <h2>疫苗推荐列表</h2>
+        <span id="status-text"></span>
+      </div>
+      <div id="result-content" class="result-content"></div>
+    </section>
+
+    <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
