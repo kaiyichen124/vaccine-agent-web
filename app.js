@@ -243,7 +243,10 @@ function expectedUnmentionedNip(ageYears) {
 }
 
 function ensureExpectedNipCoverage(answer, safetyContext) {
-  const expected = expectedUnmentionedNip(safetyContext.ageYears);
+  const expected = [...expectedUnmentionedNip(safetyContext.ageYears)];
+  for (const item of explicitMissing()) {
+    if (!expected.some(([, alias]) => alias.test(item.name))) expected.push([item.name, item.alias]);
+  }
   if (!expected.length) return answer;
   let section = '';
   const normalStable = safetyContext.ruleMode === 'stable' && !safetyContext.highRisk;
