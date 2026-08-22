@@ -123,11 +123,21 @@ function normalizeTableHeaders(answer) {
       lines[headerIndex + 1] = table.separator;
       let rowIndex = headerIndex + 2;
       while (rowIndex < lines.length && /^\|.+\|$/.test(lines[rowIndex].trim())) {
-        const cells = tableCells(lines[rowIndex]);
+        let cells = tableCells(lines[rowIndex]);
         if (table.section !== '建议确认' && cells.length >= 4) {
           lines[rowIndex] = `| ${cells[0]} | ${cells[2]} | ${cells.slice(3).join('；')} |`;
+          cells = tableCells(lines[rowIndex]);
         } else if (table.section === '建议确认' && cells.length >= 3) {
           lines[rowIndex] = `| ${cells[0]} | ${cells.slice(1).join('；')} |`;
+          cells = tableCells(lines[rowIndex]);
+        }
+        if (table.section === '建议接种' && /接种/.test(cells[1] || '')
+          && !/暂缓|确认|评估|补种|已接种|已完成/.test(cells[1] || '')) {
+          const suffix = /自愿|自费/.test(cells.join(' ')) ? '（自愿自费）' : '';
+          lines[rowIndex] = `| ${cells[0]} | 建议接种${suffix} | ${cells[2] || '符合当前接种条件'} |`;
+        }
+        if (table.section === '建议补种' && /补种/.test(cells[1] || '')) {
+          lines[rowIndex] = `| ${cells[0]} | 建议补种 | ${cells[2] || '接种记录显示相应剂次未完成'} |`;
         }
         rowIndex += 1;
       }
@@ -191,26 +201,41 @@ function insertRowsIntoTable(lines, sectionName, header, emptyRow, rows) {
   if (!/^\|.+\|$/.test(lines[headerIndex + 2]?.trim() || '')) lines.splice(headerIndex + 2, 0, emptyRow);
 }
 
-function normalizeActionGrouping(answer) {
+function normalizeActionGrouping(answer, safetyContext = getSafetyContext()) {
   const missing = explicitMissing();
-  const moved = [];
+  const movedToCatchup = [];
+  const movedToConfirm = [];
+  const movedNames = new Set();
   let section = '';
-  let lines = answer.split(/\r?\n/).filter(line => {
+  let lines = answer.split(/\r?\n/).flatMap(line => {
     const heading = line.trim().match(/^#{1,4}\s+(.+)/);
     if (heading) section = heading[1].trim();
     const isRow = /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
-    if ((section === '建议接种' || section === '建议确认') && isRow) {
+    if (['建议接种', '建议补种', '建议确认'].includes(section) && isRow) {
       const cells = tableCells(line);
       const match = missing.find(item => item.alias.test(cells[0] || ''));
       if (match) {
-        moved.push(`| ${cells[0]} | 建议补种 | 接种记录显示相应剂次未接种 |`);
-        return false;
+        if (safetyContext.ruleMode === 'acute') {
+          if (!movedNames.has(match.name)) {
+            movedToConfirm.push(`| ${cells[0]} | 暂缓，待退热且病情稳定后再评估补种 |`);
+            movedNames.add(match.name);
+          }
+          return [];
+        }
+        if (section !== '建议补种') {
+          if (!movedNames.has(match.name)) {
+            movedToCatchup.push(`| ${cells[0]} | 建议补种 | 接种记录显示相应剂次未接种 |`);
+            movedNames.add(match.name);
+          }
+          return [];
+        }
       }
     }
-    return true;
+    return [line];
   });
   insertRowsIntoTable(lines, '建议接种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', []);
-  insertRowsIntoTable(lines, '建议补种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', moved);
+  insertRowsIntoTable(lines, '建议补种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', movedToCatchup);
+  insertRowsIntoTable(lines, '建议确认', '| 疫苗 | 需要确认 |', '| 暂无 | — |', movedToConfirm);
 
   const interim = lines.join('\n');
   const activeNames = [
@@ -291,8 +316,7 @@ function validateAnswer(answer, safetyContext) {
   if (aliasDuplicate) issues.push('同一疫苗出现在多个建议中');
   const invalidSuggested = suggestedRows.some(cells => {
     const status = cells[1] || '';
-    return /^(?:已接种|已完成|核对|确认|需确认|建议确认|暂缓)/.test(status)
-      || /暂缓接种|接种前需评估/.test(status);
+    return status !== '—' && !/^建议接种/.test(status);
   });
   if (invalidSuggested) issues.push('建议接种表包含非接种状态');
   const invalidCatchup = catchupRows.some(cells => {
@@ -417,7 +441,7 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))));
+        const answer = normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext);
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
