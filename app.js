@@ -14,6 +14,9 @@ function value(id, fallback = '无') {
 }
 
 function getSafetyContext() {
+  const ageText = value('age', '未知');
+  const ageMatch = ageText.match(/\d+(?:\.\d+)?/);
+  const ageYears = ageMatch ? Number(ageMatch[0]) : null;
   const treatment = value('treatment');
   const temperatureText = value('temperature', '未知');
   const illnessStatus = value('illness-status', '不清楚');
@@ -41,6 +44,7 @@ function getSafetyContext() {
   return {
     ruleMode,
     usesAntimicrobial,
+    ageYears,
     text: `系统固定判定（不得改写）：\n- ${antimicrobialRule}\n- ${acuteRule}`,
   };
 }
@@ -167,6 +171,16 @@ function validateAnswer(answer, safetyContext) {
   const invalidNotNeeded = tableRows(notNeededSection).some(cells => /建议接种|建议补种|暂缓接种|接种前需评估/.test(cells.slice(1).join(' ')));
   if (invalidNotNeeded) {
     issues.push('“目前不用接种”包含错误状态');
+  }
+  if (safetyContext.ageYears !== null) {
+    const hasFutureDoseInActiveTables = [...tableRows(suggestedSection), ...tableRows(evaluationSection)].some(cells => {
+      const match = (cells[0] || '').match(/(\d+(?:\.\d+)?)\s*(?:周岁|岁)(?:剂次)?/);
+      return match && Number(match[1]) > safetyContext.ageYears;
+    });
+    if (hasFutureDoseInActiveTables) issues.push('尚未到年龄的剂次被放入接种或评估表');
+  }
+  if ((safetyContext.ageYears || 0) >= 4 && tableRows(evaluationSection).some(cells => /轮状病毒/.test(cells[0] || ''))) {
+    issues.push('4岁及以上轮状病毒疫苗分组错误');
   }
   if (safetyContext.ruleMode === 'acute' && !/暂缓接种/.test(evaluationSection)) issues.push('急性中重度病例未暂缓');
   if (safetyContext.ruleMode === 'stable' && safetyContext.usesAntimicrobial
