@@ -31,6 +31,7 @@ function getSafetyContext() {
   const severeAcute = (temperature !== null && temperature >= 38.5)
     || /高热|精神状态欠佳|精神差|中重度|中度急性|重度急性|病情尚未恢复|病情未恢复/.test(combined);
   const stable = /稳定|恢复期|无发热|没有发热|精神状态正常|精神正常/.test(combined);
+  const highRisk = /白血病|淋巴瘤|肿瘤|化疗|放疗|造血干细胞|器官移植|免疫缺陷|免疫抑制|大剂量激素|生物制剂|静脉注射免疫球蛋白|\bIVIG\b|严重过敏|过敏性休克/i.test(combined);
   let ruleMode = 'unknown';
   let acuteRule = '当前病情严重程度未完全说明；只在会影响接种决定时要求补充。';
   if (severeAcute) {
@@ -45,7 +46,7 @@ function getSafetyContext() {
   const antimicrobialRule = usesAntimicrobial
     ? '抗菌药物本身不构成暂缓依据；必须结合体温、症状和病情是否恢复判断。'
     : '未检测到常见抗菌药物。';
-  return { ruleMode, usesAntimicrobial, ageYears, text: `系统固定判定（不得改写）：\n- ${antimicrobialRule}\n- ${acuteRule}` };
+  return { ruleMode, usesAntimicrobial, highRisk, ageYears, text: `系统固定判定（不得改写）：\n- ${antimicrobialRule}\n- ${acuteRule}` };
 }
 
 function buildCaseInfo() {
@@ -239,6 +240,47 @@ function expectedUnmentionedNip(ageYears) {
   return thresholds.filter(([, alias, minimum, maximum]) => ageYears >= minimum
     && (maximum === undefined || ageYears < maximum)
     && !vaccineRecordSegment(alias).trim());
+}
+
+function ensureExpectedNipCoverage(answer, safetyContext) {
+  const expected = expectedUnmentionedNip(safetyContext.ageYears);
+  if (!expected.length) return answer;
+  let section = '';
+  const normalStable = safetyContext.ruleMode === 'stable' && !safetyContext.highRisk;
+  const movedNames = new Set();
+  let lines = answer.split(/\r?\n/).filter(line => {
+    const heading = line.trim().match(/^#{1,4}\s+(.+)/);
+    if (heading) section = heading[1].trim();
+    const isRow = ['建议接种', '建议补种', '建议确认'].includes(section)
+      && /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
+    if (!isRow) return true;
+    const vaccineName = tableCells(line)[0] || '';
+    const match = expected.find(([, alias]) => alias.test(vaccineName));
+    if (!match) return true;
+    if (normalStable || safetyContext.ruleMode === 'acute') {
+      movedNames.add(match[0]);
+      return false;
+    }
+    return true;
+  });
+  const current = lines.join('\n');
+  const presentNames = [
+    ...tableRows(getSection(current, '建议接种')),
+    ...tableRows(getSection(current, '建议补种')),
+    ...tableRows(getSection(current, '建议确认')),
+  ].map(cells => cells[0] || '');
+  const missing = expected.filter(([name, alias]) => movedNames.has(name) || !presentNames.some(item => alias.test(item)));
+  if (normalStable) {
+    const rows = missing.map(([name]) => `| ${name} | 建议补种 | 未在接种记录中提及，按未接种处理；按补种程序补齐适龄剂次 |`);
+    insertRowsIntoTable(lines, '建议补种', '| 疫苗 | 建议 | 原因 |', '| 暂无 | — | — |', rows);
+  } else if (safetyContext.ruleMode === 'acute') {
+    const rows = missing.map(([name]) => `| ${name} | 暂缓，待退热且病情稳定后再评估补种 |`);
+    insertRowsIntoTable(lines, '建议确认', '| 疫苗 | 需要确认 |', '| 暂无 | — |', rows);
+  } else {
+    const rows = missing.map(([name]) => `| ${name} | 按未接种处理；需结合当前疾病和治疗评估补种时机 |`);
+    insertRowsIntoTable(lines, '建议确认', '| 疫苗 | 需要确认 |', '| 暂无 | — |', rows);
+  }
+  return lines.join('\n');
 }
 
 function insertRowsIntoTable(lines, sectionName, header, emptyRow, rows) {
@@ -504,7 +546,7 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = ensureDoseCheckNote(normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext));
+        const answer = ensureDoseCheckNote(ensureExpectedNipCoverage(normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext), safetyContext));
         validationIssues = validateAnswer(answer, safetyContext);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
