@@ -116,12 +116,12 @@ const vaccineAliases = [
 
 function explicitVaccinated() {
   const record = value('vaccination', '');
-  return vaccineAliases.filter(([, alias]) => alias.test(record) && /已接种|接种过|已完成|全程|\d+剂/.test(record))
-    .map(([name, alias]) => {
-      const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
-      const complete = /已完成|全程/.test(segment) || (/乙肝/.test(segment) && /3剂/.test(segment));
-      return { name, alias, complete };
-    });
+  return vaccineAliases.map(([name, alias]) => {
+    const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
+    const vaccinated = !/未接种|没接种|未种/.test(segment) && /已接种|接种过|已完成|全程|\d+剂/.test(segment);
+    const complete = /已完成|全程/.test(segment) || (/乙肝/.test(segment) && /3剂/.test(segment));
+    return { name, alias, vaccinated, complete };
+  }).filter(item => item.vaccinated);
 }
 
 function normalizeVaccinatedGrouping(answer) {
@@ -130,35 +130,38 @@ function normalizeVaccinatedGrouping(answer) {
   const lines = answer.split(/\r?\n/);
   let section = '';
   const addToConfirm = [];
+  const handledConfirm = new Set();
   const filtered = [];
   for (const line of lines) {
     const heading = line.trim().match(/^#{1,4}\s+(.+)/);
     if (heading) section = heading[1].trim();
-    const isDataRow = section === '建议接种' && /^\|.+\|$/.test(line.trim())
+    const isDataRow = (section === '建议接种' || section === '暂缓或需要确认') && /^\|.+\|$/.test(line.trim())
       && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
     if (isDataRow) {
       const vaccineName = tableCells(line)[0] || '';
       const match = vaccinated.find(item => item.alias.test(vaccineName));
       if (match) {
-        if (!match.complete) addToConfirm.push(`| ${match.name} | 核对接种记录 | 确认已接种剂次；完成程序则无需再接种 |`);
+        if (!match.complete && !handledConfirm.has(match.name)) {
+          addToConfirm.push(`| ${match.name} | 核对记录 | 确认已接种剂次；完成程序则无需再种 |`);
+          handledConfirm.add(match.name);
+        }
         continue;
       }
     }
     filtered.push(line);
   }
-  if (!addToConfirm.length) return filtered.join('\n');
   const headingIndex = filtered.findIndex(line => /^#{1,4}\s+暂缓或需要确认\s*$/.test(line.trim()));
-  if (headingIndex < 0) return filtered.join('\n');
-  const existing = getSection(filtered.join('\n'), '暂缓或需要确认');
-  const rows = addToConfirm.filter(row => !existing.includes(tableCells(row)[0]));
-  const headerIndex = filtered.findIndex((line, index) => index > headingIndex && line.trim() === '| 疫苗 | 当前处理 | 需要确认什么 |');
-  if (headerIndex < 0) return filtered.join('\n');
-  let tableEnd = headerIndex + 2;
-  while (tableEnd < filtered.length && /^\|.+\|$/.test(filtered[tableEnd].trim())) tableEnd += 1;
-  if (filtered[headerIndex + 2]?.trim() === '| 暂无 | — | — |') filtered.splice(headerIndex + 2, 1);
-  tableEnd = headerIndex + 2;
-  while (tableEnd < filtered.length && /^\|.+\|$/.test(filtered[tableEnd].trim())) tableEnd += 1;
-  filtered.splice(tableEnd, 0, ...rows);
+  if (headingIndex >= 0 && addToConfirm.length) {
+    const existing = getSection(filtered.join('\n'), '暂缓或需要确认');
+    const rows = addToConfirm.filter(row => !existing.includes(tableCells(row)[0]));
+    const headerIndex = filtered.findIndex((line, index) => index > headingIndex && line.trim() === '| 疫苗 | 当前处理 | 需要确认什么 |');
+    if (headerIndex >= 0) {
+      if (filtered[headerIndex + 2]?.trim() === '| 暂无 | — | — |') filtered.splice(headerIndex + 2, 1);
+      let tableEnd = headerIndex + 2;
+      while (tableEnd < filtered.length && /^\|.+\|$/.test(filtered[tableEnd].trim())) tableEnd += 1;
+      filtered.splice(tableEnd, 0, ...rows);
+    }
+  }
   return filtered.join('\n');
 }
 
