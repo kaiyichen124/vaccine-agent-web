@@ -128,9 +128,10 @@ function explicitVaccinated() {
 
 function explicitMissing() {
   const record = value('vaccination', '');
+  const catchupEligible = /乙肝疫苗|卡介苗|脊灰疫苗|百白破疫苗|麻腮风疫苗|乙脑疫苗|流脑疫苗|甲肝疫苗|人乳头瘤病毒疫苗/;
   return vaccineAliases.map(([name, alias]) => {
     const segment = record.split(/[；;。\n]/).find(part => alias.test(part)) || '';
-    return { name, alias, missing: /未接种|没接种|未种|漏种/.test(segment) };
+    return { name, alias, missing: catchupEligible.test(name) && /未接种|没接种|未种|漏种/.test(segment) };
   }).filter(item => item.missing);
 }
 
