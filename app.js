@@ -155,10 +155,11 @@ function normalizeActionGrouping(answer) {
     const heading = line.trim().match(/^#{1,4}\s+(.+)/);
     if (heading) section = heading[1].trim();
     const isRow = /^\|.+\|$/.test(line.trim()) && !/^\|[-:|\s]+\|$/.test(line.trim()) && !/\|\s*疫苗\s*\|/.test(line);
-    if (section === '建议接种' && isRow) {
+    if ((section === '建议接种' || section === '建议确认') && isRow) {
       const cells = tableCells(line);
-      if (missing.some(item => item.alias.test(cells[0] || ''))) {
-        moved.push(`| ${cells[0]} | 建议补种 | ${cells[2] || '接种记录显示未接种'} |`);
+      const match = missing.find(item => item.alias.test(cells[0] || ''));
+      if (match) {
+        moved.push(`| ${cells[0]} | 建议补种 | 接种记录显示相应剂次未接种 |`);
         return false;
       }
     }
