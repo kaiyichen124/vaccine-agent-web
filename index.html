@@ -23,18 +23,33 @@
 
       <div class="form-grid">
         <label class="field">
-          <span>年龄 <b>*</b></span>
-          <input id="age" name="age" type="text" required maxlength="30" placeholder="例如：4岁6个月">
+          <span>年龄或出生日期 <b>*</b></span>
+          <input id="age" name="age" type="text" required maxlength="30" placeholder="例如：4岁6个月；或2022-02-15">
+        </label>
+
+        <label class="field">
+          <span>性别 <b>*</b></span>
+          <input id="sex" name="sex" type="text" required maxlength="10" placeholder="例如：男；女">
         </label>
 
         <label class="field full">
-          <span>当前健康情况 <b>*</b></span>
-          <input id="condition" name="condition" type="text" required maxlength="400" placeholder="例如：特应性皮炎稳定，无发热，精神正常">
+          <span>主要诊断和当前病情 <b>*</b></span>
+          <input id="condition" name="condition" type="text" required maxlength="600" placeholder="例如：特应性皮炎，病情稳定，精神正常">
+        </label>
+
+        <label class="field full">
+          <span>近期急性情况</span>
+          <input id="acute" name="acute" type="text" maxlength="400" placeholder="可填写近期发热、最高体温、住院、手术或急性发作；没有请填写“无”">
         </label>
 
         <label class="field full">
           <span>近期用药或治疗</span>
-          <input id="treatment" name="treatment" type="text" maxlength="400" placeholder="例如：正在口服阿奇霉素；没有请填写“无”">
+          <input id="treatment" name="treatment" type="text" maxlength="800" placeholder="请尽量写药名/治疗名、剂量及日期；包括化疗、免疫抑制、生物制剂、IVIG或移植等">
+        </label>
+
+        <label class="field full">
+          <span>关键检查</span>
+          <input id="tests" name="tests" type="text" maxlength="600" placeholder="只填写会影响当前接种判断的检查；没有或不清楚可填写“无/未知”">
         </label>
 
         <label class="field full">
@@ -43,8 +58,8 @@
         </label>
 
         <label class="field full">
-          <span>其他</span>
-          <input id="other" name="other" type="text" maxlength="500" placeholder="可填写严重过敏、接种后严重反应、血液制品使用等">
+          <span>过敏、接种后异常反应和其他说明</span>
+          <input id="other" name="other" type="text" maxlength="800" placeholder="可填写严重过敏、接种后严重反应或补充说明；没有请填写“无”">
         </label>
       </div>
 
@@ -62,6 +77,6 @@
 
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
-  <script src="app.js?v=20260823-30"></script>
+  <script src="app.js?v=20260823-31"></script>
 </body>
 </html>
