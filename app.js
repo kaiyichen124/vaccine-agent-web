@@ -508,8 +508,13 @@ function validateCurrentAnswer(answer) {
 
   const groupNames = ['现在可以接种', '现在先不要接种或需要确认', '目前不用安排'];
   const groups = groupNames.map(name => tableRows(getSection(answer, name)).map(cells => cells[0] || ''));
-  const aliasDuplicate = vaccineAliases.some(([, alias]) => groups.filter(group => group.some(name => alias.test(name))).length > 1);
-  if (aliasDuplicate) issues.push('同一疫苗出现在多个行动分组中');
+  const groupedNames = groups.map(group => new Set(group.map(name => (
+    name.replace(/国家免疫规划|非免疫规划|疫苗/g, '').replace(/\s+/g, '')
+  )).filter(Boolean)));
+  const exactDuplicate = groupedNames.some((group, index) => (
+    [...group].some(name => groupedNames.some((other, otherIndex) => otherIndex !== index && other.has(name)))
+  ));
+  if (exactDuplicate) issues.push('同一疫苗出现在多个行动分组中');
   return issues;
 }
 
