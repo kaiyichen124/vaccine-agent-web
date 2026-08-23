@@ -15,11 +15,14 @@ function value(id, fallback = '无') {
 
 function buildCaseInfo() {
   return [
-    `年龄：${value('age', '未知')}`,
-    `当前健康情况：${value('condition', '未知')}`,
+    `年龄或出生日期：${value('age', '未知')}`,
+    `性别：${value('sex', '未知')}`,
+    `主要诊断和当前病情：${value('condition', '未知')}`,
+    `近期急性情况：${value('acute')}`,
     `近期用药或治疗：${value('treatment')}`,
+    `关键检查：${value('tests', '未知')}`,
     `接种记录：${value('vaccination', '未知')}`,
-    `其他：${value('other')}`,
+    `严重过敏、接种后异常反应和其他说明：${value('other')}`,
   ].join('\n');
 }
 
