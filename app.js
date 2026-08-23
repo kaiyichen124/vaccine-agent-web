@@ -464,12 +464,21 @@ function normalizeCurrentAnswer(answer) {
     [/(?:依据|参考依据|参考资料)/, '来源与版本'],
   ];
   for (const [alias, target] of headingAliases) {
-    normalized = normalized.replace(new RegExp(`^(?:#{1,4}\\s*)?${alias.source}\\s*$`, 'gm'), `### ${target}`);
+    normalized = normalized.replace(new RegExp(`^(?:#{1,4}\\s*)?(?:\\*\\*)?${alias.source}(?:\\*\\*)?\\s*$`, 'gm'), `### ${target}`);
   }
 
-  const lines = normalized.split(/\r?\n/);
+  let section = '';
+  const lines = normalized.split(/\r?\n/).filter(line => {
+    const heading = line.trim().match(/^#{1,4}\s+(.+)/);
+    if (heading) section = heading[1].trim();
+    if (section !== '现在先不要接种或需要确认') return true;
+    if (!/^\|.+\|$/.test(line.trim()) || /^\|[-:|\s]+\|$/.test(line.trim())) return true;
+    const action = tableCells(line)[1] || '';
+    return !/目前不用安排|尚未到|已完成|年龄不适用|无.{0,8}适应证/.test(action);
+  });
   for (let index = 0; index < lines.length - 1; index += 1) {
     if (!/^\|.+\|$/.test(lines[index].trim())) continue;
+    if (!/(?:疫苗名称|疫苗名称或剂次|支撑内容)/.test(lines[index])) continue;
     if (/^\|[-:|\s]+\|$/.test(lines[index + 1].trim())) continue;
     if (!/^\|.+\|$/.test(lines[index + 1].trim())) continue;
     const columns = tableCells(lines[index]).length;
