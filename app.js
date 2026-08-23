@@ -98,6 +98,53 @@ function renderAnswer(markdown) {
   resultContent.innerHTML = html;
 }
 
+const ACTIVE_STATES = new Set(['建议按程序接种', '建议补种', '建议接种灭活疫苗']);
+const REVIEW_STATES = new Set(['接种前需确认', '暂缓接种']);
+
+function renderStructuredResult(data) {
+  const vaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
+  const summary = data?.priority_summary || {};
+  const priorityItems = vaccines.filter(item => ACTIVE_STATES.has(item.final_state) || REVIEW_STATES.has(item.final_state)).slice(0, 5);
+  const itemText = priorityItems.length
+    ? `<ol>${priorityItems.map(item => `<li><strong>${escapeHtml(item.display_name || item.vaccine)}</strong>${item.dose ? `（当前第${item.dose}针）` : ''}：${escapeHtml(item.final_state)}</li>`).join('')}</ol>`
+    : '<p>目前没有需要立即安排、确认或暂缓的项目。</p>';
+  const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
+
+  resultContent.innerHTML = `
+    <section class="priority-panel">
+      <h3>本次最需要关注</h3>
+      <p>目前有 <strong>${Number(summary.action_count || 0)}</strong> 项需要安排，<strong>${Number(summary.confirm_count || 0)}</strong> 项需要确认，<strong>${Number(summary.defer_count || 0)}</strong> 项需要暂缓。</p>
+      ${itemText}
+    </section>
+    <section>
+      <h3>疫苗安排一览</h3>
+      <div class="status-filters" role="group" aria-label="按状态筛选">
+        <button type="button" data-filter="active" class="active">现在需要处理</button>
+        <button type="button" data-filter="review">需要确认或暂缓</button>
+        <button type="button" data-filter="inactive">目前不用处理</button>
+        <button type="button" data-filter="all">全部疫苗</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前建议</th><th>说明</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
+    </section>
+    ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
+    <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
+    ${sourceHtml ? `<section><h3>主要依据</h3><ul>${sourceHtml}</ul></section>` : ''}`;
+
+  const body = resultContent.querySelector('#vaccine-table-body');
+  const draw = filter => {
+    const shown = vaccines.filter(item => filter === 'all'
+      || (filter === 'active' && ACTIVE_STATES.has(item.final_state))
+      || (filter === 'review' && REVIEW_STATES.has(item.final_state))
+      || (filter === 'inactive' && !ACTIVE_STATES.has(item.final_state) && !REVIEW_STATES.has(item.final_state)));
+    body.innerHTML = shown.map(item => `<tr data-state="${escapeHtml(item.final_state)}"><td>${escapeHtml(item.display_name || item.vaccine)}${item.dose ? `（第${item.dose}针）` : ''}</td><td><span class="state-pill">${escapeHtml(item.final_state)}</span></td><td>${escapeHtml(item.reason || item.detail || '')}</td></tr>`).join('') || '<tr><td colspan="3">该分类下暂无项目。</td></tr>';
+  };
+  resultContent.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
+    resultContent.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
+    draw(button.dataset.filter);
+  }));
+  draw('active');
+}
+
 async function getPassport() {
   const response = await fetch(`${DIFY_ORIGIN}/api/passport`, {
     headers: { 'X-App-Code': APP_CODE },
@@ -123,6 +170,7 @@ async function runWorkflow(caseInfo) {
   const decoder = new TextDecoder();
   let buffer = '';
   let answer = '';
+  let resultJson = null;
   while (true) {
     const { value: chunk, done } = await reader.read();
     if (done) break;
@@ -136,7 +184,11 @@ async function runWorkflow(caseInfo) {
           const event = JSON.parse(line.slice(5).trim());
           if (event.event === 'text_chunk' && event.data?.text) answer += event.data.text;
           if (event.event === 'workflow_finished') {
-            answer = event.data?.outputs?.text || answer;
+            const outputs = event.data?.outputs || {};
+            answer = outputs.vaccine_recommendation || outputs.text || answer;
+            if (outputs.result_json) {
+              try { resultJson = typeof outputs.result_json === 'string' ? JSON.parse(outputs.result_json) : outputs.result_json; } catch { resultJson = null; }
+            }
             if (event.data?.status === 'failed') throw new Error(event.data.error || '生成失败');
           }
           if (event.event === 'error') throw new Error(event.message || '生成失败');
@@ -147,7 +199,7 @@ async function runWorkflow(caseInfo) {
     }
   }
   if (!answer.trim()) throw new Error('没有收到完整结果，请重新生成。');
-  return answer;
+  return { answer, resultJson };
 }
 
 form.addEventListener('submit', async event => {
@@ -163,10 +215,12 @@ form.addEventListener('submit', async event => {
   resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
-    const answer = normalizeForDisplay(await runWorkflow(buildCaseInfo()));
+    const workflowResult = await runWorkflow(buildCaseInfo());
+    const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
-    renderAnswer(answer);
+    if (workflowResult.resultJson?.vaccines?.length) renderStructuredResult(workflowResult.resultJson);
+    else renderAnswer(answer);
     statusText.textContent = '已完成';
   } catch (error) {
     statusText.textContent = '';
