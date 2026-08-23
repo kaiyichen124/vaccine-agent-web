@@ -52,7 +52,7 @@ function getSafetyContext() {
 function buildCaseInfo() {
   return [
     getSafetyContext().text,
-    '接种记录解释规则（必须执行）：用户提到的疫苗，如未明确写明“未接种、未完成、漏种、仅接种若干剂或剂次不清”，一律视为已完成截至当前年龄的全部剂次，不再推荐；未提到的疫苗一律视为从未接种，必须逐项覆盖截至该年龄应接种的国家免疫规划疫苗，并结合健康情况直接归入建议接种、建议补种或因医学原因暂缓，不得放入建议确认要求核对记录。对于从未接种或未完成的疫苗，按疫苗名称写“按补种程序补齐适龄剂次”，不要只写当前年龄对应的某一剂。建议确认只用于确实影响接种的疾病、治疗、过敏或明确写出的剂次不清。下一步不得再写核对接种记录或确认漏种，末尾由系统统一提示核对已接种疫苗剂次。',
+    '接种记录解释规则（必须执行）：接种史空白、接种证遗失、剂次不清或记不清时，统一视为接种史未知；不得当作未接种或已完成，禁止写“按未接种处理”。多剂次疫苗必须按顺序判断：第1剂明确未接种时只能建议第1剂；前序剂次未知时先核对记录，不得推荐后续剂次。',
     `年龄：${value('age', '未知')}`,
     `当前健康情况：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment')}`,
@@ -452,6 +452,58 @@ function validateAnswer(answer, safetyContext) {
   return issues;
 }
 
+function normalizeCurrentAnswer(answer) {
+  let normalized = answer.replaceAll('｜', '|');
+  const headingAliases = [
+    [/(?:结论摘要|结论)/, '一句话结论'],
+    [/(?:患儿情况)/, '孩子目前情况'],
+    [/(?:现在建议接种|现在可接种)/, '现在可以接种'],
+    [/(?:暂缓或接种前需评估|暂缓或需要确认|接种前确认|接种前评估)/, '现在先不要接种或需要确认'],
+    [/(?:目前不用接种)/, '目前不用安排'],
+    [/(?:下一步|行动建议)/, '下一步怎么做'],
+    [/(?:依据|参考依据|参考资料)/, '来源与版本'],
+  ];
+  for (const [alias, target] of headingAliases) {
+    normalized = normalized.replace(new RegExp(`^(?:#{1,4}\\s*)?${alias.source}\\s*$`, 'gm'), `### ${target}`);
+  }
+
+  const lines = normalized.split(/\r?\n/);
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!/^\|.+\|$/.test(lines[index].trim())) continue;
+    if (/^\|[-:|\s]+\|$/.test(lines[index + 1].trim())) continue;
+    if (!/^\|.+\|$/.test(lines[index + 1].trim())) continue;
+    const columns = tableCells(lines[index]).length;
+    lines.splice(index + 1, 0, `|${Array(columns).fill('---').join('|')}|`);
+    index += 1;
+  }
+  return lines.join('\n').trim();
+}
+
+function validateCurrentAnswer(answer) {
+  const issues = [];
+  if (!answer || answer.trim().length < 120) issues.push('结果为空或不完整');
+  const invalidUnknownAssumption = answer.split(/\r?\n/).some(line => (
+    /按未接种处理|未提到.{0,20}视为.{0,10}未接种/.test(line)
+    && !/不能|禁止|不得|不应|不可/.test(line)
+  ));
+  if (invalidUnknownAssumption) {
+    issues.push('接种史未知被错误当作未接种');
+  }
+
+  const vaccination = value('vaccination', '');
+  const actionable = getSection(answer, '现在可以接种');
+  if (/乙肝.{0,20}(?:第?1剂|第一针).{0,12}未接种/.test(vaccination)
+    && /乙肝.{0,40}(?:第?[23]剂|第[二三]针)/.test(actionable)) {
+    issues.push('乙肝疫苗第1剂未接种时错误推荐了后续剂次');
+  }
+
+  const groupNames = ['现在可以接种', '现在先不要接种或需要确认', '目前不用安排'];
+  const groups = groupNames.map(name => tableRows(getSection(answer, name)).map(cells => cells[0] || ''));
+  const aliasDuplicate = vaccineAliases.some(([, alias]) => groups.filter(group => group.some(name => alias.test(name))).length > 1);
+  if (aliasDuplicate) issues.push('同一疫苗出现在多个行动分组中');
+  return issues;
+}
+
 function renderAnswer(markdown) {
   const lines = escapeHtml(markdown).split(/\r?\n/);
   let html = '';
@@ -554,8 +606,8 @@ form.addEventListener('submit', async event => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       statusText.textContent = attempt === 1 ? '正在生成推荐列表' : `正在重新生成并校验（${attempt}/3）`;
       try {
-        const answer = ensureDoseCheckNote(ensureExpectedNipCoverage(normalizeActionGrouping(normalizeVaccinatedGrouping(normalizeTableHeaders(normalizeSections(await runWorkflow(buildCaseInfo())))), safetyContext), safetyContext));
-        validationIssues = validateAnswer(answer, safetyContext);
+        const answer = normalizeCurrentAnswer(await runWorkflow(buildCaseInfo()));
+        validationIssues = validateCurrentAnswer(answer);
         if (!validationIssues.length) { validAnswer = answer; break; }
       } catch (attemptError) {
         validationIssues = [attemptError.message || '本次生成失败'];
