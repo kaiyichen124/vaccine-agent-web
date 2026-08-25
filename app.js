@@ -144,35 +144,48 @@ function implementationText(item) {
 }
 
 function renderStructuredResult(data) {
-  const vaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
+  const auditVaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
+  const parentView = data?.parent_view || {};
+  const visibleIds = Array.isArray(parentView.visible_vaccine_ids) ? new Set(parentView.visible_vaccine_ids) : null;
+  const vaccines = visibleIds ? auditVaccines.filter(item => visibleIds.has(item.vaccine_id)) : auditVaccines;
   const summary = data?.priority_summary || {};
   const patientDecision = data?.patient_decision || {};
   const broadHighRisk = patientDecision.gate === 'HIGH_RISK_SPECIAL_PATH';
+  const parentSummary = parentView.summary || {};
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
     ? `<ol class="priority-list">${priorityItems.map(item => `<li><strong>${renderVaccineName(item)}</strong><span>${escapeHtml(item.final_state)}</span><small>${escapeHtml(item.reason || '')}</small></li>`).join('')}</ol>`
-    : '<p>目前没有需要立即处理的项目。</p>';
+    : parentSummary.grouped_record_task
+      ? '<p><strong>先核对接种证或电子接种记录。</strong>这是一个记录核对任务，不代表孩子有多项漏种。</p>'
+      : '<p>目前没有需要立即处理的项目。</p>';
   const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
   const highRisk = ['HIGH_RISK_SPECIAL_PATH', 'TARGETED_HIGH_RISK', 'ACUTE_DEFER'].includes(patientDecision.gate);
-  const routineSummary = summary.defer_count === null || summary.defer_assessment === 'UNKNOWN_CURRENT_HEALTH_STATUS'
-    ? `${Number(summary.action_count || 0)} 项现在可以安排；${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)} 项待核实信息。`
-    : `${Number(summary.action_count || 0)} 项现在可以安排；${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)} 项待核实信息。`;
+  const routineSummary = `${Number(parentSummary.action_count ?? summary.action_count ?? 0)} 项现在可以安排；${Number(parentSummary.information_task_count ?? summary.confirmation_count ?? summary.confirm_count ?? 0)} 项信息核对任务。`;
+  const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
+  const specialGuidance = Array.isArray(parentView.special_path_guidance) ? parentView.special_path_guidance : [];
+  const historyHtml = recognizedHistory.length
+    ? `<section class="recognized-history"><h3>系统已读到的接种记录</h3><p>${recognizedHistory.map(escapeHtml).join('、')}。</p></section>`
+    : '';
+  const guidanceHtml = specialGuidance.length
+    ? `<section class="special-guidance"><h3>后续疫苗方向</h3>${specialGuidance.map(group => `<article><h4>${escapeHtml(group.direction || '')}</h4><p class="guidance-vaccines">${(group.vaccines || []).map(escapeHtml).join('、')}</p><p>${escapeHtml(group.explanation || '')}</p></article>`).join('')}</section>`
+    : '';
 
   resultContent.innerHTML = `
     ${patientDecision.headline ? `<section class="patient-gate ${highRisk ? 'patient-gate-high' : 'patient-gate-routine'}"><h3>${escapeHtml(patientDecision.headline)}</h3><p>${escapeHtml(patientDecision.alert || '')}</p>${(patientDecision.critical_missing || []).length ? `<p><strong>关键待核实：</strong>${patientDecision.critical_missing.map(escapeHtml).join('、')}</p>` : ''}</section>` : ''}
+    ${historyHtml}
     ${broadHighRisk ? '' : `<section class="priority-panel">
       <h3>本次最需要关注</h3>
       <p>${highRisk ? escapeHtml(patientDecision.alert || '') : escapeHtml(routineSummary)}</p>
       ${itemText}
     </section>`}
-    ${broadHighRisk ? '<section class="high-risk-table-note"><p>逐疫苗程序将在补齐上述关键信息后按特殊接种路径计算。</p></section>' : `<section>
+    ${broadHighRisk ? guidanceHtml : `<section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
         <button type="button" data-filter="active" class="active">现在可以安排</button>
         <button type="button" data-filter="info">待核实信息</button>
         <button type="button" data-filter="medical">暂缓或专业评估</button>
-        <button type="button" data-filter="inactive">目前不用安排</button>
+        <button type="button" data-filter="inactive">近期无需安排</button>
         <button type="button" data-filter="all">查看全部</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前结论</th><th>原因</th><th>现在怎么做</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>

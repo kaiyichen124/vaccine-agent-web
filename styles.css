@@ -120,7 +120,14 @@ input:focus, select:focus {
 .patient-gate-high h3 { color: #9f241d; }
 .patient-gate-routine { border: 1px solid #add8c4; background: #f0faf5; }
 .patient-gate-routine h3 { color: #176448; }
-.high-risk-table-note { margin: -4px 0 16px; color: #667085; }
+.recognized-history { margin-bottom: 16px; padding: 16px 20px; border: 1px solid #d7dee8; border-radius: 8px; background: #f8fafc; }
+.recognized-history h3, .special-guidance h3 { margin-top: 0; }
+.recognized-history p { margin-bottom: 0; }
+.special-guidance { margin-bottom: 16px; }
+.special-guidance article { margin-top: 10px; padding: 16px 20px; border: 1px solid #d8c9a8; border-radius: 8px; background: #fffaf0; }
+.special-guidance h4 { margin: 0 0 8px; color: #6f4f12; font-size: 1rem; }
+.special-guidance article p { margin: 6px 0 0; }
+.guidance-vaccines { color: #27364a; font-weight: 650; }
 .priority-panel h3 { margin-top: 0; }
 .priority-list { display: grid; gap: 10px; padding-left: 24px; }
 .priority-list li { padding-left: 4px; }
