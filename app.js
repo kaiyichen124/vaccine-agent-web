@@ -112,6 +112,7 @@ const REASON_LABELS = {
   CURRENT_ACUTE_ILLNESS: '当前急性期',
   IMMUNOSUPPRESSION_LIVE_VACCINE: '免疫抑制相关',
   IVIG_INJECTABLE_LIVE_INTERVAL: 'IVIG间隔相关',
+  PATIENT_HIGH_RISK_PATHWAY: '高风险特殊路径',
   AGE_LIMIT: '超过补种年龄',
   POPULATION: '人群不适用',
   RECORD_COMPLETE: '记录已完成',
@@ -145,27 +146,30 @@ function implementationText(item) {
 function renderStructuredResult(data) {
   const vaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
   const summary = data?.priority_summary || {};
+  const patientDecision = data?.patient_decision || {};
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
     ? `<ol class="priority-list">${priorityItems.map(item => `<li><strong>${renderVaccineName(item)}</strong><span>${escapeHtml(item.final_state)}</span><small>${escapeHtml(item.reason || '')}</small></li>`).join('')}</ol>`
     : '<p>目前没有需要立即处理的项目。</p>';
   const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
-  const deferSentence = summary.defer_count === null || summary.defer_assessment === 'UNKNOWN_CURRENT_HEALTH_STATUS'
-    ? '当前急性健康状态信息不足，暂时无法判断是否需要暂缓。'
-    : `${Number(summary.defer_count || 0)} 项需要暂缓。`;
+  const highRisk = ['HIGH_RISK_SPECIAL_PATH', 'TARGETED_HIGH_RISK', 'ACUTE_DEFER'].includes(patientDecision.gate);
+  const routineSummary = summary.defer_count === null || summary.defer_assessment === 'UNKNOWN_CURRENT_HEALTH_STATUS'
+    ? `${Number(summary.action_count || 0)} 项现在可以安排；${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)} 项待核实信息。`
+    : `${Number(summary.action_count || 0)} 项现在可以安排；${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)} 项待核实信息。`;
 
   resultContent.innerHTML = `
+    ${patientDecision.headline ? `<section class="patient-gate ${highRisk ? 'patient-gate-high' : 'patient-gate-routine'}"><h3>${escapeHtml(patientDecision.headline)}</h3><p>${escapeHtml(patientDecision.alert || '')}</p>${(patientDecision.critical_missing || []).length ? `<p><strong>关键待核实：</strong>${patientDecision.critical_missing.map(escapeHtml).join('、')}</p>` : ''}</section>` : ''}
     <section class="priority-panel">
       <h3>本次最需要关注</h3>
-      <p><strong>${Number(summary.action_count || 0)}</strong> 项现在可以安排；<strong>${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)}</strong> 项需要补充记录或产品信息；<strong>${Number(summary.medical_review_count || 0)}</strong> 项需要专业评估。${escapeHtml(deferSentence)}</p>
+      <p>${highRisk ? escapeHtml(patientDecision.alert || '') : escapeHtml(routineSummary)}</p>
       ${itemText}
     </section>
     <section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
         <button type="button" data-filter="active" class="active">现在可以安排</button>
-        <button type="button" data-filter="info">先补资料</button>
+        <button type="button" data-filter="info">待核实信息</button>
         <button type="button" data-filter="medical">暂缓或专业评估</button>
         <button type="button" data-filter="inactive">目前不用安排</button>
         <button type="button" data-filter="all">查看全部</button>

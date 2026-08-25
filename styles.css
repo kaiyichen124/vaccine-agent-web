@@ -113,6 +113,13 @@ input:focus, select:focus {
 .result-content tr:nth-child(even) td { background: #fafbfd; }
 .result-content a { color: #1f4e79; overflow-wrap: anywhere; }
 .priority-panel { padding: 18px 20px; border: 1px solid #b9d5ee; border-radius: 8px; background: #f2f8fd; }
+.patient-gate { margin-bottom: 16px; padding: 18px 20px; border-radius: 8px; }
+.patient-gate h3 { margin-top: 0; }
+.patient-gate p:last-child { margin-bottom: 0; }
+.patient-gate-high { border: 1px solid #f0a7a0; background: #fff1f0; }
+.patient-gate-high h3 { color: #9f241d; }
+.patient-gate-routine { border: 1px solid #add8c4; background: #f0faf5; }
+.patient-gate-routine h3 { color: #176448; }
 .priority-panel h3 { margin-top: 0; }
 .priority-list { display: grid; gap: 10px; padding-left: 24px; }
 .priority-list li { padding-left: 4px; }
