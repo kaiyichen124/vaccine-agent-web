@@ -121,6 +121,14 @@ const REASON_LABELS = {
   NEXT_DOSE_NOT_DUE: '下一剂未到期',
   OPTIONAL_PRODUCT_AND_HISTORY: '自费产品与记录',
   NO_HIGH_RISK_INDICATION: '无高风险指征',
+  COMPONENT_OVERLAP_DATE_REQUIRED: '成分记录重叠',
+  LAST_DOSE_DATE_REQUIRED: '需核对上一剂日期',
+  POLIO_PRODUCT_PATH_AND_DATE: '脊灰产品路径与日期',
+  MINIMUM_INTERVAL_NOT_MET: '最小间隔未满足',
+  EPILEPSY_CONTROL_REQUIRED: '癫痫控制情况',
+  CHD_STABILITY_REQUIRED: '先心病稳定性',
+  CHD_UNSTABLE: '先心病当前不稳定',
+  PRETERM_CURRENT_STABILITY_REQUIRED: '当前临床稳定性',
 };
 
 function decisionCode(item) {
@@ -160,18 +168,26 @@ function renderStructuredResult(data) {
       ? '<p><strong>先核对接种证或电子接种记录。</strong>这是一个记录核对任务，不代表孩子有多项漏种。</p>'
       : '<p>目前没有需要立即处理的项目。</p>';
   const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
-  const highRisk = ['HIGH_RISK_SPECIAL_PATH', 'TARGETED_HIGH_RISK', 'ACUTE_DEFER'].includes(patientDecision.gate);
-  const routineSummary = `${Number(parentSummary.action_count ?? summary.action_count ?? 0)} 项现在可以安排；${Number(parentSummary.information_task_count ?? summary.confirmation_count ?? summary.confirm_count ?? 0)} 项信息核对任务。`;
+  const highRisk = ['HIGH_RISK_SPECIAL_PATH', 'TARGETED_HIGH_RISK', 'TARGETED_HEALTH_INFO', 'ACUTE_DEFER'].includes(patientDecision.gate);
+  const summaryParts = [`${Number(parentSummary.action_count ?? summary.action_count ?? 0)}项现在可以安排`];
+  if (Number(parentSummary.record_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.record_items_to_verify)}项接种记录待核实`);
+  if (Number(parentSummary.product_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.product_items_to_verify)}项产品路径待核实`);
+  if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项健康状态待核实`);
+  const routineSummary = `${summaryParts.join('；')}。`;
   const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
-  const specialGuidance = Array.isArray(parentView.special_path_guidance) ? parentView.special_path_guidance : [];
+  const specialPathVaccines = Array.isArray(parentView.special_path_vaccines) ? parentView.special_path_vaccines : [];
+  const healthSummaryHtml = parentView.health_summary
+    ? `<section class="health-summary"><h3>孩子目前情况</h3><p>${escapeHtml(parentView.health_summary)}</p></section>`
+    : '';
   const historyHtml = recognizedHistory.length
     ? `<section class="recognized-history"><h3>系统已读到的接种记录</h3><p>${recognizedHistory.map(escapeHtml).join('、')}。</p></section>`
     : '';
-  const guidanceHtml = specialGuidance.length
-    ? `<section class="special-guidance"><h3>后续疫苗方向</h3>${specialGuidance.map(group => `<article><h4>${escapeHtml(group.direction || '')}</h4><p class="guidance-vaccines">${(group.vaccines || []).map(escapeHtml).join('、')}</p><p>${escapeHtml(group.explanation || '')}</p></article>`).join('')}</section>`
+  const guidanceHtml = specialPathVaccines.length
+    ? `<section class="special-guidance"><h3>适龄疫苗逐项方向</h3><div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>面向看护人的介绍与建议</th></tr></thead><tbody>${specialPathVaccines.map(item => `<tr><td><strong>${escapeHtml(item.vaccine_name || '')}</strong><small>${escapeHtml(item.category || '')}</small></td><td><span class="research-status">${escapeHtml(item.standard_recommendation_status || '')}</span><p>${escapeHtml(item.caregiver_advice || '')}</p>${item.evidence_limit ? `<small>${escapeHtml(item.evidence_limit)}</small>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`
     : '';
 
   resultContent.innerHTML = `
+    ${healthSummaryHtml}
     ${patientDecision.headline ? `<section class="patient-gate ${highRisk ? 'patient-gate-high' : 'patient-gate-routine'}"><h3>${escapeHtml(patientDecision.headline)}</h3><p>${escapeHtml(patientDecision.alert || '')}</p>${(patientDecision.critical_missing || []).length ? `<p><strong>关键待核实：</strong>${patientDecision.critical_missing.map(escapeHtml).join('、')}</p>` : ''}</section>` : ''}
     ${historyHtml}
     ${broadHighRisk ? '' : `<section class="priority-panel">
@@ -188,7 +204,7 @@ function renderStructuredResult(data) {
         <button type="button" data-filter="inactive">近期无需安排</button>
         <button type="button" data-filter="all">查看全部</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前结论</th><th>原因</th><th>现在怎么做</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>面向看护人的介绍与建议</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
     </section>`}
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
@@ -208,9 +224,8 @@ function renderStructuredResult(data) {
     body.innerHTML = shown.map(item => {
       const code = decisionCode(item);
       const reasonLabel = REASON_LABELS[item.reason_code] || item.reason_code || '程序判断';
-      const action = ACTIVE_CODES.has(code) ? '安排当前这一剂' : INFO_CODES.has(code) ? '按原因补齐信息' : code === 'TEMPORARILY_DEFERRED' ? '满足等待条件后复评' : code === 'MEDICAL_REVIEW' ? '仅评估受影响的疫苗' : '当前无需处理';
-      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span></td><td><span class="reason-tag">${escapeHtml(reasonLabel)}</span><div>${escapeHtml(item.reason || item.detail || '')}</div></td><td>${escapeHtml(action)}</td></tr>`;
-    }).join('') || '<tr><td colspan="4">该分类下暂无项目。</td></tr>';
+      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
+    }).join('') || '<tr><td colspan="2">该分类下暂无项目。</td></tr>';
   };
   resultContent.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
     resultContent.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
