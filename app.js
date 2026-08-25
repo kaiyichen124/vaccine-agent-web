@@ -147,6 +147,7 @@ function renderStructuredResult(data) {
   const vaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
   const summary = data?.priority_summary || {};
   const patientDecision = data?.patient_decision || {};
+  const broadHighRisk = patientDecision.gate === 'HIGH_RISK_SPECIAL_PATH';
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
@@ -160,12 +161,12 @@ function renderStructuredResult(data) {
 
   resultContent.innerHTML = `
     ${patientDecision.headline ? `<section class="patient-gate ${highRisk ? 'patient-gate-high' : 'patient-gate-routine'}"><h3>${escapeHtml(patientDecision.headline)}</h3><p>${escapeHtml(patientDecision.alert || '')}</p>${(patientDecision.critical_missing || []).length ? `<p><strong>关键待核实：</strong>${patientDecision.critical_missing.map(escapeHtml).join('、')}</p>` : ''}</section>` : ''}
-    <section class="priority-panel">
+    ${broadHighRisk ? '' : `<section class="priority-panel">
       <h3>本次最需要关注</h3>
       <p>${highRisk ? escapeHtml(patientDecision.alert || '') : escapeHtml(routineSummary)}</p>
       ${itemText}
-    </section>
-    <section>
+    </section>`}
+    ${broadHighRisk ? '<section class="high-risk-table-note"><p>逐疫苗程序将在补齐上述关键信息后按特殊接种路径计算。</p></section>' : `<section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
         <button type="button" data-filter="active" class="active">现在可以安排</button>
@@ -175,12 +176,13 @@ function renderStructuredResult(data) {
         <button type="button" data-filter="all">查看全部</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前结论</th><th>原因</th><th>现在怎么做</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
-    </section>
+    </section>`}
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
     ${sourceHtml ? `<section><h3>主要依据</h3><ul>${sourceHtml}</ul></section>` : ''}`;
 
   const body = resultContent.querySelector('#vaccine-table-body');
+  if (!body) return;
   const draw = filter => {
     const shown = vaccines.filter(item => {
       const code = decisionCode(item);
