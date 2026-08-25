@@ -98,33 +98,79 @@ function renderAnswer(markdown) {
   resultContent.innerHTML = html;
 }
 
-const ACTIVE_STATES = new Set(['建议按程序接种', '建议补种', '建议接种灭活疫苗']);
-const REVIEW_STATES = new Set(['接种前需确认', '暂缓接种']);
+const ACTIVE_CODES = new Set(['NOW_DUE', 'CATCHUP_DUE']);
+const INFO_CODES = new Set(['RECORDS_NEEDED', 'PRODUCT_NEEDED', 'HEALTH_STATUS_NEEDED']);
+const MEDICAL_CODES = new Set(['MEDICAL_REVIEW', 'TEMPORARILY_DEFERRED']);
+const INACTIVE_CODES = new Set(['COMPLETED', 'NOT_YET_DUE', 'CATCHUP_WINDOW_CLOSED', 'POPULATION_NOT_APPLICABLE', 'NO_INDICATION']);
+
+const REASON_LABELS = {
+  DOSE_HISTORY_INSUFFICIENT: '剂次不清',
+  PRODUCT_PROGRAM_DEPENDENT: '产品影响程序',
+  AGE_MISSING: '年龄资料不足',
+  ROUTINE_DUE: '常规到期',
+  EXPLICIT_GAP: '明确漏种',
+  CURRENT_ACUTE_ILLNESS: '当前急性期',
+  IMMUNOSUPPRESSION_LIVE_VACCINE: '免疫抑制相关',
+  IVIG_INJECTABLE_LIVE_INTERVAL: 'IVIG间隔相关',
+  AGE_LIMIT: '超过补种年龄',
+  POPULATION: '人群不适用',
+  RECORD_COMPLETE: '记录已完成',
+  DOSE_COUNT_COMPLETE: '剂次已完成',
+  AGE_NOT_DUE: '尚未到年龄',
+  NEXT_DOSE_NOT_DUE: '下一剂未到期',
+  OPTIONAL_PRODUCT_AND_HISTORY: '自费产品与记录',
+  NO_HIGH_RISK_INDICATION: '无高风险指征',
+};
+
+function decisionCode(item) {
+  if (item.decision_state) return item.decision_state;
+  if (['建议按程序接种', '建议补种', '建议接种灭活疫苗'].includes(item.final_state)) return 'NOW_DUE';
+  if (item.final_state === '暂缓接种') return 'TEMPORARILY_DEFERRED';
+  if (item.final_state === '接种前需确认') return 'RECORDS_NEEDED';
+  return 'COMPLETED';
+}
+
+function renderVaccineName(item) {
+  const dose = item.dose ? `（第${Number(item.dose)}剂）` : '';
+  return `${escapeHtml(item.display_name || item.vaccine)}${dose}`;
+}
+
+function implementationText(item) {
+  const options = Array.isArray(item.implementation_options) ? item.implementation_options : [];
+  if (!options.length) return '';
+  const names = [...new Set(options.map(option => option.product).filter(Boolean))];
+  return names.length ? `<div class="implementation-note">可选实现方案：${names.map(escapeHtml).join('、')}。同一抗原剂次不要与单苗重复。</div>` : '';
+}
 
 function renderStructuredResult(data) {
   const vaccines = Array.isArray(data?.vaccines) ? data.vaccines : [];
   const summary = data?.priority_summary || {};
-  const priorityItems = vaccines.filter(item => ACTIVE_STATES.has(item.final_state) || REVIEW_STATES.has(item.final_state)).slice(0, 5);
+  const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
+  const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
-    ? `<ol>${priorityItems.map(item => `<li><strong>${escapeHtml(item.display_name || item.vaccine)}</strong>${item.dose ? `（当前第${item.dose}针）` : ''}：${escapeHtml(item.final_state)}</li>`).join('')}</ol>`
-    : '<p>目前没有需要立即安排、确认或暂缓的项目。</p>';
+    ? `<ol class="priority-list">${priorityItems.map(item => `<li><strong>${renderVaccineName(item)}</strong><span>${escapeHtml(item.final_state)}</span><small>${escapeHtml(item.reason || '')}</small></li>`).join('')}</ol>`
+    : '<p>目前没有需要立即处理的项目。</p>';
   const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
+  const deferSentence = summary.defer_count === null || summary.defer_assessment === 'UNKNOWN_CURRENT_HEALTH_STATUS'
+    ? '当前急性健康状态信息不足，暂时无法判断是否需要暂缓。'
+    : `${Number(summary.defer_count || 0)} 项需要暂缓。`;
 
   resultContent.innerHTML = `
     <section class="priority-panel">
       <h3>本次最需要关注</h3>
-      <p>目前有 <strong>${Number(summary.action_count || 0)}</strong> 项需要安排，<strong>${Number(summary.confirm_count || 0)}</strong> 项需要确认，<strong>${Number(summary.defer_count || 0)}</strong> 项需要暂缓。</p>
+      <p><strong>${Number(summary.action_count || 0)}</strong> 项现在可以安排；<strong>${Number(summary.confirmation_count ?? summary.confirm_count ?? 0)}</strong> 项需要补充记录或产品信息；<strong>${Number(summary.medical_review_count || 0)}</strong> 项需要专业评估。${escapeHtml(deferSentence)}</p>
       ${itemText}
     </section>
     <section>
-      <h3>疫苗安排一览</h3>
+      <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
-        <button type="button" data-filter="active" class="active">现在需要处理</button>
-        <button type="button" data-filter="review">需要确认或暂缓</button>
-        <button type="button" data-filter="inactive">目前不用处理</button>
-        <button type="button" data-filter="all">全部疫苗</button>
+        <button type="button" data-filter="active" class="active">现在可以安排</button>
+        <button type="button" data-filter="info">先补资料</button>
+        <button type="button" data-filter="medical">暂缓或专业评估</button>
+        <button type="button" data-filter="inactive">目前不用安排</button>
+        <button type="button" data-filter="all">查看全部</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前建议</th><th>说明</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>当前结论</th><th>原因</th><th>现在怎么做</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
     </section>
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
@@ -132,11 +178,20 @@ function renderStructuredResult(data) {
 
   const body = resultContent.querySelector('#vaccine-table-body');
   const draw = filter => {
-    const shown = vaccines.filter(item => filter === 'all'
-      || (filter === 'active' && ACTIVE_STATES.has(item.final_state))
-      || (filter === 'review' && REVIEW_STATES.has(item.final_state))
-      || (filter === 'inactive' && !ACTIVE_STATES.has(item.final_state) && !REVIEW_STATES.has(item.final_state)));
-    body.innerHTML = shown.map(item => `<tr data-state="${escapeHtml(item.final_state)}"><td>${escapeHtml(item.display_name || item.vaccine)}${item.dose ? `（第${item.dose}针）` : ''}</td><td><span class="state-pill">${escapeHtml(item.final_state)}</span></td><td>${escapeHtml(item.reason || item.detail || '')}</td></tr>`).join('') || '<tr><td colspan="3">该分类下暂无项目。</td></tr>';
+    const shown = vaccines.filter(item => {
+      const code = decisionCode(item);
+      return filter === 'all'
+        || (filter === 'active' && ACTIVE_CODES.has(code))
+        || (filter === 'info' && INFO_CODES.has(code))
+        || (filter === 'medical' && MEDICAL_CODES.has(code))
+        || (filter === 'inactive' && INACTIVE_CODES.has(code));
+    });
+    body.innerHTML = shown.map(item => {
+      const code = decisionCode(item);
+      const reasonLabel = REASON_LABELS[item.reason_code] || item.reason_code || '程序判断';
+      const action = ACTIVE_CODES.has(code) ? '安排当前这一剂' : INFO_CODES.has(code) ? '按原因补齐信息' : code === 'TEMPORARILY_DEFERRED' ? '满足等待条件后复评' : code === 'MEDICAL_REVIEW' ? '仅评估受影响的疫苗' : '当前无需处理';
+      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span></td><td><span class="reason-tag">${escapeHtml(reasonLabel)}</span><div>${escapeHtml(item.reason || item.detail || '')}</div></td><td>${escapeHtml(action)}</td></tr>`;
+    }).join('') || '<tr><td colspan="4">该分类下暂无项目。</td></tr>';
   };
   resultContent.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
     resultContent.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
