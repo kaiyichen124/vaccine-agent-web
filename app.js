@@ -129,6 +129,10 @@ const REASON_LABELS = {
   CHD_STABILITY_REQUIRED: '先心病稳定性',
   CHD_UNSTABLE: '先心病当前不稳定',
   PRETERM_CURRENT_STABILITY_REQUIRED: '当前临床稳定性',
+  HIGH_RISK_ACTIVE_PATH: '高风险治疗路径',
+  HIGH_RISK_LIVE_VACCINE_DEFER: '高风险期暂缓活疫苗',
+  HIGH_RISK_TREATMENT_INFORMATION_REQUIRED: '关键治疗信息待补充',
+  OPTIONAL_PRODUCT_AGE_CLOSED: '已超过产品年龄窗口',
 };
 
 function decisionCode(item) {
@@ -158,7 +162,6 @@ function renderStructuredResult(data) {
   const vaccines = visibleIds ? auditVaccines.filter(item => visibleIds.has(item.vaccine_id)) : auditVaccines;
   const summary = data?.priority_summary || {};
   const patientDecision = data?.patient_decision || {};
-  const broadHighRisk = patientDecision.gate === 'HIGH_RISK_SPECIAL_PATH';
   const parentSummary = parentView.summary || {};
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
@@ -167,35 +170,32 @@ function renderStructuredResult(data) {
     : parentSummary.grouped_record_task
       ? '<p><strong>先核对接种证或电子接种记录。</strong>这是一个记录核对任务，不代表孩子有多项漏种。</p>'
       : '<p>目前没有需要立即处理的项目。</p>';
-  const sourceHtml = (data.sources || []).map(source => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`).join('');
-  const highRisk = ['HIGH_RISK_SPECIAL_PATH', 'TARGETED_HIGH_RISK', 'TARGETED_HEALTH_INFO', 'ACUTE_DEFER'].includes(patientDecision.gate);
+  const sourceHtml = (data.sources || []).map(source => source.url
+    ? `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`
+    : `<li>${escapeHtml(source.title)}</li>`).join('');
+  const highRisk = ['HIGH_RISK_ACTIVE', 'HIGH_RISK_INFORMATION_PENDING', 'TARGETED_MODIFIER', 'ACUTE_DEFER'].includes(patientDecision.gate);
   const summaryParts = [`${Number(parentSummary.action_count ?? summary.action_count ?? 0)}项现在可以安排`];
   if (Number(parentSummary.record_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.record_items_to_verify)}项接种记录待核实`);
   if (Number(parentSummary.product_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.product_items_to_verify)}项产品路径待核实`);
   if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项健康状态待核实`);
   const routineSummary = `${summaryParts.join('；')}。`;
   const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
-  const specialPathVaccines = Array.isArray(parentView.special_path_vaccines) ? parentView.special_path_vaccines : [];
   const healthSummaryHtml = parentView.health_summary
     ? `<section class="health-summary"><h3>孩子目前情况</h3><p>${escapeHtml(parentView.health_summary)}</p></section>`
     : '';
   const historyHtml = recognizedHistory.length
     ? `<section class="recognized-history"><h3>系统已读到的接种记录</h3><p>${recognizedHistory.map(escapeHtml).join('、')}。</p></section>`
     : '';
-  const guidanceHtml = specialPathVaccines.length
-    ? `<section class="special-guidance"><h3>适龄疫苗逐项方向</h3><div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>面向看护人的介绍与建议</th></tr></thead><tbody>${specialPathVaccines.map(item => `<tr><td><strong>${escapeHtml(item.vaccine_name || '')}</strong><small>${escapeHtml(item.category || '')}</small></td><td><span class="research-status">${escapeHtml(item.standard_recommendation_status || '')}</span><p>${escapeHtml(item.caregiver_advice || '')}</p>${item.evidence_limit ? `<small>${escapeHtml(item.evidence_limit)}</small>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`
-    : '';
-
   resultContent.innerHTML = `
     ${healthSummaryHtml}
     ${patientDecision.headline ? `<section class="patient-gate ${highRisk ? 'patient-gate-high' : 'patient-gate-routine'}"><h3>${escapeHtml(patientDecision.headline)}</h3><p>${escapeHtml(patientDecision.alert || '')}</p>${(patientDecision.critical_missing || []).length ? `<p><strong>关键待核实：</strong>${patientDecision.critical_missing.map(escapeHtml).join('、')}</p>` : ''}</section>` : ''}
     ${historyHtml}
-    ${broadHighRisk ? '' : `<section class="priority-panel">
+    <section class="priority-panel">
       <h3>本次最需要关注</h3>
       <p>${highRisk ? escapeHtml(patientDecision.alert || '') : escapeHtml(routineSummary)}</p>
       ${itemText}
-    </section>`}
-    ${broadHighRisk ? guidanceHtml : `<section>
+    </section>
+    <section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
         <button type="button" data-filter="active" class="active">现在可以安排</button>
@@ -205,7 +205,7 @@ function renderStructuredResult(data) {
         <button type="button" data-filter="all">查看全部</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>面向看护人的介绍与建议</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
-    </section>`}
+    </section>
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
     ${sourceHtml ? `<section><h3>主要依据</h3><ul>${sourceHtml}</ul></section>` : ''}`;
