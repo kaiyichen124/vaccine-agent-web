@@ -173,11 +173,14 @@ function renderStructuredResult(data) {
   const sourceHtml = (data.sources || []).map(source => source.url
     ? `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`
     : `<li>${escapeHtml(source.title)}</li>`).join('');
-  const highRisk = ['HIGH_RISK_ACTIVE', 'HIGH_RISK_INFORMATION_PENDING', 'TARGETED_MODIFIER', 'ACUTE_DEFER'].includes(patientDecision.gate);
+  const highRisk = ['HIGH_RISK_ACTIVE', 'HIGH_RISK_INFORMATION_PENDING', 'RISK_INFORMATION_PENDING', 'TARGETED_MODIFIER', 'ACUTE_DEFER'].includes(patientDecision.gate);
   const summaryParts = [`${Number(parentSummary.action_count ?? summary.action_count ?? 0)}项现在可以安排`];
   if (Number(parentSummary.record_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.record_items_to_verify)}项接种记录待核实`);
   if (Number(parentSummary.product_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.product_items_to_verify)}项产品路径待核实`);
-  if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项健康状态待核实`);
+  if (Number(parentSummary.medical_review_count || 0)) summaryParts.push(`${Number(parentSummary.medical_review_count)}项需要专业评估`);
+  if (Number(parentSummary.deferred_count || 0)) summaryParts.push(`${Number(parentSummary.deferred_count)}项暂缓接种`);
+  if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项疫苗需补充健康状态`);
+  if (Number(parentSummary.critical_clinical_information_count || 0)) summaryParts.push(`${Number(parentSummary.critical_clinical_information_count)}项关键临床信息待核实`);
   const routineSummary = `${summaryParts.join('；')}。`;
   const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
   const healthSummaryHtml = parentView.health_summary
