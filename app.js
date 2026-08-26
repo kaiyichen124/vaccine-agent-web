@@ -132,6 +132,8 @@ const REASON_LABELS = {
   HIGH_RISK_ACTIVE_PATH: '高风险治疗路径',
   HIGH_RISK_LIVE_VACCINE_DEFER: '高风险期暂缓活疫苗',
   HIGH_RISK_TREATMENT_INFORMATION_REQUIRED: '关键治疗信息待补充',
+  UNMAPPED_DIAGNOSIS_RISK_REVIEW: '当前诊断的接种风险待判定',
+  INFECTIOUS_CURRENT_STATUS_REQUIRED: '需确认急性感染是否恢复',
   OPTIONAL_PRODUCT_AGE_CLOSED: '已超过产品年龄窗口',
 };
 
@@ -182,6 +184,15 @@ function renderStructuredResult(data) {
   if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项疫苗需补充健康状态`);
   if (Number(parentSummary.critical_clinical_information_count || 0)) summaryParts.push(`${Number(parentSummary.critical_clinical_information_count)}项关键临床信息待核实`);
   const routineSummary = `${summaryParts.join('；')}。`;
+  const filterCounts = {
+    active: vaccines.filter(item => ACTIVE_CODES.has(decisionCode(item))).length,
+    info: vaccines.filter(item => INFO_CODES.has(decisionCode(item))).length,
+    medical: vaccines.filter(item => MEDICAL_CODES.has(decisionCode(item))).length,
+    inactive: vaccines.filter(item => INACTIVE_CODES.has(decisionCode(item))).length,
+  };
+  const initialFilter = filterCounts.active ? 'active'
+    : filterCounts.medical ? 'medical'
+      : filterCounts.info ? 'info' : 'inactive';
   const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
   const healthSummaryHtml = parentView.health_summary
     ? `<section class="health-summary"><h3>孩子目前情况</h3><p>${escapeHtml(parentView.health_summary)}</p></section>`
@@ -195,16 +206,16 @@ function renderStructuredResult(data) {
     ${historyHtml}
     <section class="priority-panel">
       <h3>本次最需要关注</h3>
-      <p>${highRisk ? escapeHtml(patientDecision.alert || '') : escapeHtml(routineSummary)}</p>
+      <p>${escapeHtml(routineSummary)}</p>
       ${itemText}
     </section>
     <section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
-        <button type="button" data-filter="active" class="active">现在可以安排</button>
-        <button type="button" data-filter="info">待核实信息</button>
-        <button type="button" data-filter="medical">暂缓或专业评估</button>
-        <button type="button" data-filter="inactive">近期无需安排</button>
+        <button type="button" data-filter="active" ${filterCounts.active ? '' : 'disabled'}>现在可以安排（${filterCounts.active}）</button>
+        <button type="button" data-filter="info" ${filterCounts.info ? '' : 'disabled'}>待核实信息（${filterCounts.info}）</button>
+        <button type="button" data-filter="medical" ${filterCounts.medical ? '' : 'disabled'}>暂缓或专业评估（${filterCounts.medical}）</button>
+        <button type="button" data-filter="inactive" ${filterCounts.inactive ? '' : 'disabled'}>近期无需安排（${filterCounts.inactive}）</button>
         <button type="button" data-filter="all">查看全部</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>疫苗名称</th><th>面向看护人的介绍与建议</th></tr></thead><tbody id="vaccine-table-body"></tbody></table></div>
@@ -226,7 +237,7 @@ function renderStructuredResult(data) {
     });
     body.innerHTML = shown.map(item => {
       const code = decisionCode(item);
-      const reasonLabel = REASON_LABELS[item.reason_code] || item.reason_code || '程序判断';
+      const reasonLabel = item.parent_reason_label || REASON_LABELS[item.reason_code] || '接种程序判断';
       return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
     }).join('') || '<tr><td colspan="2">该分类下暂无项目。</td></tr>';
   };
@@ -234,7 +245,9 @@ function renderStructuredResult(data) {
     resultContent.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
     draw(button.dataset.filter);
   }));
-  draw('active');
+  const initialButton = resultContent.querySelector(`[data-filter="${initialFilter}"]`);
+  if (initialButton) initialButton.classList.add('active');
+  draw(initialFilter);
 }
 
 async function getPassport() {
