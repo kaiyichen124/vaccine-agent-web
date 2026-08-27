@@ -6,7 +6,7 @@
   <meta name="description" content="填写儿童健康与接种情况，生成疫苗推荐列表。">
   <title>儿童疫苗推荐助手</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23168b78%22/><text x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-size=%2234%22 fill=%22white%22>苗</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=20260826-15">
+  <link rel="stylesheet" href="styles.css?v=20260827-1">
 </head>
 <body>
   <main class="page-shell">
@@ -42,10 +42,29 @@
           <input id="treatment" name="treatment" type="text" maxlength="800" placeholder="请尽量写药名/治疗名、剂量及日期；包括化疗、免疫抑制、生物制剂、IVIG或移植等">
         </label>
 
-        <label class="field full">
-          <span>接种记录 <b>*</b></span>
-          <input id="vaccination" name="vaccination" type="text" required maxlength="600" placeholder="例如：已完成3岁前国家免疫规划疫苗；不清楚请填写“未知”">
-        </label>
+        <fieldset class="field full vaccine-record-field">
+          <legend>接种记录 <b>*</b></legend>
+          <div class="record-mode-row">
+            <label class="record-unknown-option">
+              <input id="vaccination-unknown" type="checkbox">
+              <span>接种记录不清楚</span>
+            </label>
+            <span class="record-mode-hint">可搜索并选择已经接种、明确未接种或需要核对的疫苗。</span>
+          </div>
+          <div id="vaccine-selector" class="vaccine-selector">
+            <label class="vaccine-search-label" for="vaccine-search">搜索疫苗</label>
+            <input id="vaccine-search" type="search" placeholder="例如：乙肝、五联、流感、肺炎、水痘">
+            <div id="vaccine-option-groups" class="vaccine-option-groups"></div>
+            <div id="selected-vaccine-records" class="selected-vaccine-records" aria-live="polite">
+              <p class="empty-selection">尚未选择疫苗。</p>
+            </div>
+          </div>
+          <label class="record-supplement" for="vaccination-extra">
+            <span>其他接种记录或整体完成情况</span>
+            <input id="vaccination-extra" type="text" maxlength="600" placeholder="例如：已完成2岁前国家免疫规划疫苗；或补充具体产品信息">
+          </label>
+          <input id="vaccination" name="vaccination" type="hidden">
+        </fieldset>
 
         <label class="field full">
           <span>过敏、接种后异常反应和其他说明</span>
@@ -67,6 +86,6 @@
 
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
-  <script src="app.js?v=20260826-17"></script>
+  <script src="app.js?v=20260827-1"></script>
 </body>
 </html>

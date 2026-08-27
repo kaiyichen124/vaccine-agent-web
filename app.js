@@ -8,6 +8,124 @@ const resultCard = document.querySelector('#result-card');
 const resultContent = document.querySelector('#result-content');
 const statusText = document.querySelector('#status-text');
 
+const VACCINE_OPTIONS = [
+  { id: 'hep_b', name: '乙肝疫苗', group: '国家免疫规划疫苗', keywords: '乙型肝炎' },
+  { id: 'bcg', name: '卡介苗', group: '国家免疫规划疫苗', keywords: '结核' },
+  { id: 'polio', name: '脊灰疫苗（IPV/OPV）', recordName: '脊灰疫苗', group: '国家免疫规划疫苗', keywords: '脊髓灰质炎 糖丸 IPV OPV bOPV' },
+  { id: 'dtap', name: '百白破疫苗', group: '国家免疫规划疫苗', keywords: '白喉 百日咳 破伤风 DTaP' },
+  { id: 'mmr', name: '麻腮风疫苗', group: '国家免疫规划疫苗', keywords: '麻疹 腮腺炎 风疹 MMR' },
+  { id: 'je', name: '乙脑疫苗', group: '国家免疫规划疫苗', keywords: '乙型脑炎' },
+  { id: 'meningococcal', name: '流脑疫苗', group: '国家免疫规划疫苗', keywords: '脑膜炎球菌 A群 A群C群 AC流脑' },
+  { id: 'hep_a', name: '甲肝疫苗', group: '国家免疫规划疫苗', keywords: '甲型肝炎' },
+  { id: 'hpv_nip', name: 'HPV疫苗（双/四/九价）', recordName: 'HPV疫苗', group: '国家免疫规划疫苗', keywords: '人乳头瘤病毒 宫颈癌' },
+  { id: 'flu', name: '流感疫苗', group: '非免疫规划疫苗', keywords: '流行性感冒' },
+  { id: 'varicella', name: '水痘疫苗', group: '非免疫规划疫苗', keywords: '带状疱疹' },
+  { id: 'pcv', name: '肺炎球菌结合疫苗', group: '非免疫规划疫苗', keywords: '肺炎疫苗 PCV 13价 15价 20价' },
+  { id: 'hib', name: 'Hib疫苗', group: '非免疫规划疫苗', keywords: 'b型流感嗜血杆菌' },
+  { id: 'rotavirus', name: '轮状病毒疫苗', group: '非免疫规划疫苗', keywords: '轮状 五价轮状' },
+  { id: 'ev71', name: 'EV71灭活疫苗', group: '非免疫规划疫苗', keywords: '手足口 肠道病毒71型' },
+  { id: 'ppsv23', name: '23价肺炎球菌多糖疫苗', group: '非免疫规划疫苗', keywords: 'PPSV23 23价肺炎' },
+  { id: 'four_in_one', name: '四联疫苗', group: '联合疫苗', keywords: 'DTaP IPV Hib' },
+  { id: 'five_in_one', name: '五联疫苗', group: '联合疫苗', keywords: 'DTaP IPV Hib' },
+  { id: 'six_in_one', name: '六联疫苗', group: '联合疫苗', keywords: 'DTaP IPV Hib 乙肝' },
+  { id: 'men_hib', name: 'A群C群流脑-Hib联合疫苗', group: '联合疫苗', keywords: 'AC-Hib 流脑Hib' },
+  { id: 'hep_ab', name: '甲乙肝联合疫苗', group: '联合疫苗', keywords: '甲肝乙肝' },
+];
+
+const vaccineGroups = document.querySelector('#vaccine-option-groups');
+const selectedVaccineRecords = document.querySelector('#selected-vaccine-records');
+const vaccineSearch = document.querySelector('#vaccine-search');
+const vaccinationUnknown = document.querySelector('#vaccination-unknown');
+const vaccinationExtra = document.querySelector('#vaccination-extra');
+const vaccinationHidden = document.querySelector('#vaccination');
+const vaccineRecordState = new Map();
+
+function vaccineRecordName(item) {
+  return item.recordName || item.name;
+}
+
+function renderVaccineOptions() {
+  const query = vaccineSearch.value.trim().toLowerCase();
+  const groups = [...new Set(VACCINE_OPTIONS.map(item => item.group))];
+  vaccineGroups.innerHTML = groups.map(group => {
+    const items = VACCINE_OPTIONS.filter(item => item.group === group && `${item.name} ${item.keywords}`.toLowerCase().includes(query));
+    if (!items.length) return '';
+    return `<section class="vaccine-option-group"><h4>${group}</h4><div class="vaccine-option-list">${items.map(item => `
+      <label class="vaccine-option">
+        <input type="checkbox" data-vaccine-id="${item.id}" ${vaccineRecordState.has(item.id) ? 'checked' : ''}>
+        <span>${item.name}</span>
+      </label>`).join('')}</div></section>`;
+  }).join('') || '<p class="empty-selection">没有找到匹配的疫苗。</p>';
+
+  vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(input => input.addEventListener('change', () => {
+    if (input.checked) vaccineRecordState.set(input.dataset.vaccineId, { status: 'VACCINATED', doses: '', dates: '' });
+    else vaccineRecordState.delete(input.dataset.vaccineId);
+    renderSelectedVaccineRecords();
+  }));
+}
+
+function renderSelectedVaccineRecords() {
+  if (!vaccineRecordState.size) {
+    selectedVaccineRecords.innerHTML = '<p class="empty-selection">选中疫苗后，可填写接种状态、剂次数和日期。</p>';
+    return;
+  }
+  selectedVaccineRecords.innerHTML = [...vaccineRecordState.entries()].map(([id, record]) => {
+    const item = VACCINE_OPTIONS.find(option => option.id === id);
+    const doseDisabled = record.status !== 'VACCINATED' ? 'disabled' : '';
+    const dateDisabled = ['NOT_VACCINATED', 'UNKNOWN'].includes(record.status) ? 'disabled' : '';
+    return `<div class="selected-vaccine-row" data-record-id="${id}">
+      <strong>${item.name}</strong>
+      <label><span>接种状态</span><select data-record-field="status">
+        <option value="VACCINATED" ${record.status === 'VACCINATED' ? 'selected' : ''}>已接种</option>
+        <option value="COMPLETED" ${record.status === 'COMPLETED' ? 'selected' : ''}>已完成全程</option>
+        <option value="NOT_VACCINATED" ${record.status === 'NOT_VACCINATED' ? 'selected' : ''}>明确未接种</option>
+        <option value="UNKNOWN" ${record.status === 'UNKNOWN' ? 'selected' : ''}>记录待核实</option>
+      </select></label>
+      <label><span>已接种剂数</span><input type="number" min="1" max="10" inputmode="numeric" placeholder="如 3" value="${escapeHtml(record.doses)}" data-record-field="doses" ${doseDisabled}></label>
+      <label><span>接种日期（可不填）</span><input type="text" placeholder="如 2024-01-01、2024-03-01" value="${escapeHtml(record.dates)}" data-record-field="dates" ${dateDisabled}></label>
+    </div>`;
+  }).join('');
+
+  selectedVaccineRecords.querySelectorAll('[data-record-field]').forEach(input => {
+    const update = () => {
+      const row = input.closest('[data-record-id]');
+      const record = vaccineRecordState.get(row.dataset.recordId);
+      record[input.dataset.recordField] = input.value.trim();
+      if (input.dataset.recordField === 'status') renderSelectedVaccineRecords();
+    };
+    input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', update);
+  });
+}
+
+function buildVaccinationRecord() {
+  if (vaccinationUnknown.checked) return '接种记录不清楚';
+  const records = [...vaccineRecordState.entries()].map(([id, record]) => {
+    const item = VACCINE_OPTIONS.find(option => option.id === id);
+    const name = vaccineRecordName(item);
+    let text = '';
+    if (record.status === 'COMPLETED') text = `${name}已完成全程`;
+    else if (record.status === 'NOT_VACCINATED') text = `${name}明确未接种`;
+    else if (record.status === 'UNKNOWN') text = `${name}接种记录待核实`;
+    else text = record.doses ? `${name}${record.doses}剂` : `${name}已接种，剂次未知`;
+    if (record.dates && !['NOT_VACCINATED', 'UNKNOWN'].includes(record.status)) text += `，接种日期：${record.dates}`;
+    return text;
+  });
+  const extra = vaccinationExtra.value.trim();
+  if (extra) records.push(extra);
+  return records.join('；');
+}
+
+vaccineSearch.addEventListener('input', renderVaccineOptions);
+vaccinationUnknown.addEventListener('change', () => {
+  document.querySelector('.vaccine-selector').classList.toggle('is-disabled', vaccinationUnknown.checked);
+  vaccineSearch.disabled = vaccinationUnknown.checked;
+  vaccinationExtra.disabled = vaccinationUnknown.checked;
+  vaccineGroups.querySelectorAll('input').forEach(input => { input.disabled = vaccinationUnknown.checked; });
+});
+
+renderVaccineOptions();
+renderSelectedVaccineRecords();
+
 function value(id, fallback = '无') {
   const text = document.querySelector(`#${id}`)?.value?.trim() || '';
   return text || fallback;
@@ -19,7 +137,7 @@ function buildCaseInfo() {
     `性别：${value('sex', '未知')}`,
     `主要诊断和当前病情：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment', '未填写')}`,
-    `接种记录：${value('vaccination', '未知')}`,
+    `接种记录：${buildVaccinationRecord() || '未知'}`,
     `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
   ].join('\n');
 }
@@ -311,6 +429,14 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   errorBox.hidden = true;
   if (!form.reportValidity()) return;
+  const vaccinationRecord = buildVaccinationRecord();
+  if (!vaccinationRecord) {
+    errorBox.textContent = '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请勾选“接种记录不清楚”。';
+    errorBox.hidden = false;
+    document.querySelector('.vaccine-record-field').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  vaccinationHidden.value = vaccinationRecord;
 
   submitButton.disabled = true;
   submitButton.textContent = '正在生成，请稍候…';
