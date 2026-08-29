@@ -78,11 +78,15 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .vaccine-option[hidden] { display: none; }
 .selected-vaccine-records { display: grid; gap: 10px; }
 .empty-selection { margin: 0; color: #7a8596; font-size: 13px; }
-.selected-vaccine-row { display: grid; grid-template-columns: minmax(130px, 1.2fr) minmax(130px, 1fr) 92px minmax(160px, 1.4fr); gap: 8px; align-items: end; padding: 12px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
+.selected-vaccine-row { display: grid; gap: 12px; padding: 12px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
+.selected-vaccine-main { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(145px, 1fr) 105px minmax(190px, 1.35fr); gap: 8px; align-items: end; }
 .selected-vaccine-name { align-self: center; color: #17324d; font-size: 14px; font-weight: 700; }
 .selected-vaccine-row label { display: grid; gap: 5px; color: #667085; font-size: 12px; }
 .selected-vaccine-row select, .selected-vaccine-row input { height: 38px; padding: 0 9px; font-size: 13px; }
 .selected-vaccine-row .dose-input:disabled, .selected-vaccine-row .date-input:disabled { background: #f2f4f7; color: #98a2b3; }
+.dose-date-grid { display: grid; grid-template-columns: 88px repeat(auto-fit, minmax(135px, 1fr)); gap: 8px; align-items: end; padding-top: 10px; border-top: 1px dashed #d8e0e9; }
+.dose-date-grid > span { align-self: center; color: #344054; font-size: 12px; font-weight: 700; }
+.dose-date-hint { margin: 0; padding-top: 9px; border-top: 1px dashed #d8e0e9; color: #7a8596; font-size: 12px; }
 .record-supplement { display: grid; gap: 8px; margin-top: 8px; }
 .record-supplement > span { color: #344054; font-size: 13px; font-weight: 600; }
 
@@ -190,11 +194,12 @@ input:focus, select:focus {
   .case-card, .result-card { padding: 20px 16px; border-radius: 7px; }
   .form-grid { grid-template-columns: 1fr; gap: 15px; }
   .field.full { grid-column: auto; }
-  .selected-vaccine-row { grid-template-columns: 1fr 1fr; }
+  .selected-vaccine-main { grid-template-columns: 1fr 1fr; }
   .selected-vaccine-name { grid-column: 1 / -1; }
 }
 
 @media (max-width: 430px) {
-  .selected-vaccine-row { grid-template-columns: 1fr; }
+  .selected-vaccine-main { grid-template-columns: 1fr; }
   .selected-vaccine-name { grid-column: auto; }
+  .dose-date-grid { grid-template-columns: 1fr; }
 }

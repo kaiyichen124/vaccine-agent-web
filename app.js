@@ -50,6 +50,26 @@ const vaccinationExtra = document.querySelector('#vaccination-extra');
 const vaccinationHidden = document.querySelector('#vaccination');
 const vaccineRecordState = new Map();
 
+function currentInfluenzaSeason() {
+  const now = new Date();
+  const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
+function createEmptyVaccineRecord(id) {
+  return {
+    status: 'VACCINATED',
+    doses: '',
+    doseDates: [],
+    seasonStatus: id === 'flu' ? 'UNKNOWN' : null,
+  };
+}
+
+function resizeDoseDates(record) {
+  const count = Math.max(0, Math.min(10, Number(record.doses) || 0));
+  record.doseDates = Array.from({ length: count }, (_, index) => record.doseDates?.[index] || '');
+}
+
 function vaccineRecordName(item) {
   return item.recordName || item.name;
 }
@@ -68,7 +88,7 @@ function renderVaccineOptions() {
   }).join('') || '<p class="empty-selection">没有找到匹配的疫苗。</p>';
 
   vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(input => input.addEventListener('change', () => {
-    if (input.checked) vaccineRecordState.set(input.dataset.vaccineId, { status: 'VACCINATED', doses: '', dates: '' });
+    if (input.checked) vaccineRecordState.set(input.dataset.vaccineId, createEmptyVaccineRecord(input.dataset.vaccineId));
     else vaccineRecordState.delete(input.dataset.vaccineId);
     renderSelectedVaccineRecords();
   }));
@@ -81,10 +101,20 @@ function renderSelectedVaccineRecords() {
   }
   selectedVaccineRecords.innerHTML = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
-    const doseDisabled = record.status !== 'VACCINATED' ? 'disabled' : '';
+    const doseDisabled = !['VACCINATED', 'COMPLETED'].includes(record.status) ? 'disabled' : '';
     const dateDisabled = ['NOT_VACCINATED', 'UNKNOWN'].includes(record.status) ? 'disabled' : '';
+    resizeDoseDates(record);
+    const doseDateInputs = record.doseDates.length
+      ? `<div class="dose-date-grid"><span>逐剂日期</span>${record.doseDates.map((dateValue, index) => `<label><span>第${index + 1}剂</span><input type="date" value="${escapeHtml(dateValue)}" data-dose-date-index="${index}" ${dateDisabled}></label>`).join('')}</div>`
+      : '<p class="dose-date-hint">填写已接种剂数后，可逐剂录入日期并验证最小间隔。</p>';
+    const influenzaSeason = id === 'flu' ? `<label class="season-status"><span>${currentInfluenzaSeason()}流感季</span><select data-record-field="seasonStatus">
+      <option value="UNKNOWN" ${record.seasonStatus === 'UNKNOWN' ? 'selected' : ''}>本流感季情况不清楚</option>
+      <option value="VACCINATED" ${record.seasonStatus === 'VACCINATED' ? 'selected' : ''}>本流感季已接种</option>
+      <option value="NOT_VACCINATED" ${record.seasonStatus === 'NOT_VACCINATED' ? 'selected' : ''}>本流感季未接种</option>
+    </select></label>` : '';
     return `<div class="selected-vaccine-row" data-record-id="${id}">
-      <strong>${item.name}</strong>
+      <div class="selected-vaccine-main">
+      <strong class="selected-vaccine-name">${item.name}</strong>
       <label><span>接种状态</span><select data-record-field="status">
         <option value="VACCINATED" ${record.status === 'VACCINATED' ? 'selected' : ''}>已接种</option>
         <option value="COMPLETED" ${record.status === 'COMPLETED' ? 'selected' : ''}>已完成全程</option>
@@ -92,7 +122,9 @@ function renderSelectedVaccineRecords() {
         <option value="UNKNOWN" ${record.status === 'UNKNOWN' ? 'selected' : ''}>记录待核实</option>
       </select></label>
       <label><span>已接种剂数</span><input type="number" min="1" max="10" inputmode="numeric" placeholder="如 3" value="${escapeHtml(record.doses)}" data-record-field="doses" ${doseDisabled}></label>
-      <label><span>接种日期（可不填）</span><input type="text" placeholder="如 2024-01-01、2024-03-01" value="${escapeHtml(record.dates)}" data-record-field="dates" ${dateDisabled}></label>
+      ${influenzaSeason}
+      </div>
+      ${doseDateInputs}
     </div>`;
   }).join('');
 
@@ -101,10 +133,51 @@ function renderSelectedVaccineRecords() {
       const row = input.closest('[data-record-id]');
       const record = vaccineRecordState.get(row.dataset.recordId);
       record[input.dataset.recordField] = input.value.trim();
-      if (input.dataset.recordField === 'status') renderSelectedVaccineRecords();
+      if (input.dataset.recordField === 'doses') resizeDoseDates(record);
+      if (['status', 'doses'].includes(input.dataset.recordField)) renderSelectedVaccineRecords();
     };
     input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', update);
   });
+
+  selectedVaccineRecords.querySelectorAll('[data-dose-date-index]').forEach(input => input.addEventListener('change', () => {
+    const row = input.closest('[data-record-id]');
+    const record = vaccineRecordState.get(row.dataset.recordId);
+    record.doseDates[Number(input.dataset.doseDateIndex)] = input.value;
+  }));
+}
+
+function buildVaccinationPayload() {
+  if (vaccinationUnknown.checked) {
+    return { schema_version: 'vaccination_history_v2', record_state: 'UNKNOWN', events: [], free_text: '' };
+  }
+  const events = [...vaccineRecordState.entries()].map(([id, record]) => {
+    const item = VACCINE_OPTIONS.find(option => option.id === id);
+    const doseCount = ['VACCINATED', 'COMPLETED'].includes(record.status) && record.doses ? Number(record.doses) : null;
+    const historyState = record.status === 'COMPLETED' ? 'COMPLETE'
+      : record.status === 'NOT_VACCINATED' ? 'EXPLICIT_MISSING'
+        : record.status === 'UNKNOWN' ? 'UNKNOWN'
+          : doseCount ? 'COUNTED' : 'ANY_DOSE';
+    return {
+      event_id: `ui-${id}`,
+      product_id: id,
+      display_name: item.name,
+      history_state: historyState,
+      dose_count: historyState === 'EXPLICIT_MISSING' ? 0 : doseCount,
+      doses: Array.from({ length: doseCount || 0 }, (_, index) => ({
+        dose_number: index + 1,
+        date: record.doseDates?.[index] || null,
+      })),
+      influenza_season: id === 'flu' ? currentInfluenzaSeason() : null,
+      current_season_status: id === 'flu' ? record.seasonStatus : null,
+      source: 'STRUCTURED_UI',
+    };
+  });
+  return {
+    schema_version: 'vaccination_history_v2',
+    record_state: events.length || vaccinationExtra.value.trim() ? 'PARTIAL' : 'EMPTY',
+    events,
+    free_text: vaccinationExtra.value.trim(),
+  };
 }
 
 function buildVaccinationRecord() {
@@ -113,11 +186,16 @@ function buildVaccinationRecord() {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
     const name = vaccineRecordName(item);
     let text = '';
-    if (record.status === 'COMPLETED') text = `${name}已完成全程`;
+    if (record.status === 'COMPLETED') text = record.doses ? `${name}${record.doses}剂，标记为已完成全程` : `${name}已完成全程`;
     else if (record.status === 'NOT_VACCINATED') text = `${name}明确未接种`;
     else if (record.status === 'UNKNOWN') text = `${name}接种记录待核实`;
     else text = record.doses ? `${name}${record.doses}剂` : `${name}已接种，剂次未知`;
-    if (record.dates && !['NOT_VACCINATED', 'UNKNOWN'].includes(record.status)) text += `，接种日期：${record.dates}`;
+    const datedDoses = (record.doseDates || []).map((dateValue, index) => dateValue ? `第${index + 1}剂${dateValue}` : '').filter(Boolean);
+    if (datedDoses.length && !['NOT_VACCINATED', 'UNKNOWN'].includes(record.status)) text += `，逐剂日期：${datedDoses.join('、')}`;
+    if (id === 'flu') {
+      const seasonText = record.seasonStatus === 'VACCINATED' ? '本流感季已接种' : record.seasonStatus === 'NOT_VACCINATED' ? '本流感季未接种' : '本流感季接种情况不清楚';
+      text += `，${currentInfluenzaSeason()}流感季：${seasonText}`;
+    }
     return text;
   });
   const extra = vaccinationExtra.value.trim();
@@ -142,11 +220,13 @@ function value(id, fallback = '无') {
 }
 
 function buildCaseInfo() {
+  const vaccinationPayload = buildVaccinationPayload();
   return [
     `年龄或出生日期：${value('age', '未知')}`,
     `性别：${value('sex', '未知')}`,
     `主要诊断和当前病情：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment', '未填写')}`,
+    `接种记录结构化JSON：${JSON.stringify(vaccinationPayload)}`,
     `接种记录：${buildVaccinationRecord() || '未知'}`,
     `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
   ].join('\n');
@@ -263,6 +343,12 @@ const REASON_LABELS = {
   UNMAPPED_DIAGNOSIS_RISK_REVIEW: '当前诊断的接种风险待判定',
   INFECTIOUS_CURRENT_STATUS_REQUIRED: '需确认急性感染是否恢复',
   OPTIONAL_PRODUCT_AGE_CLOSED: '已超过产品年龄窗口',
+  PROGRAM_COMPLETION_DATES_INCOMPLETE: '逐剂日期尚未完整',
+  INFLUENZA_CURRENT_SEASON_REQUIRED: '需确认本流感季接种状态',
+  INFLUENZA_CURRENT_SEASON_DUE: '本流感季尚未接种',
+  INFLUENZA_CURRENT_SEASON_COMPLETE: '本流感季已接种',
+  HARD_RULE_MODEL_CONFLICT: '规则与病例复核存在关键冲突',
+  SOFT_MODEL_REVIEW: '病例语义复核后需进一步核实',
 };
 
 function decisionCode(item) {
