@@ -220,13 +220,11 @@ function value(id, fallback = '无') {
 }
 
 function buildCaseInfo() {
-  const vaccinationPayload = buildVaccinationPayload();
   return [
     `年龄或出生日期：${value('age', '未知')}`,
     `性别：${value('sex', '未知')}`,
     `主要诊断和当前病情：${value('condition', '未知')}`,
     `近期用药或治疗：${value('treatment', '未填写')}`,
-    `接种记录结构化JSON：${JSON.stringify(vaccinationPayload)}`,
     `接种记录：${buildVaccinationRecord() || '未知'}`,
     `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
   ].join('\n');
@@ -359,6 +357,16 @@ function decisionCode(item) {
   return 'COMPLETED';
 }
 
+function buildHealthCaseInfo() {
+  return [
+    `年龄或出生日期：${value('age', '未知')}`,
+    `性别：${value('sex', '未知')}`,
+    `主要诊断和当前病情：${value('condition', '未知')}`,
+    `近期用药或治疗：${value('treatment', '未填写')}`,
+    `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
+  ].join('\n');
+}
+
 function renderVaccineName(item) {
   const dose = item.dose ? `（第${Number(item.dose)}剂）` : '';
   return `${escapeHtml(item.display_name || item.vaccine)}${dose}`;
@@ -472,7 +480,7 @@ async function getPassport() {
   return (await response.json()).access_token;
 }
 
-async function runWorkflow(caseInfo) {
+async function runWorkflow(caseInfo, healthCaseInfo, vaccinationPayload) {
   const passport = await getPassport();
   const response = await fetch(`${DIFY_ORIGIN}/api/workflows/run`, {
     method: 'POST',
@@ -481,7 +489,11 @@ async function runWorkflow(caseInfo) {
       'X-App-Code': APP_CODE,
       'X-App-Passport': passport,
     },
-    body: JSON.stringify({ inputs: { case_info: caseInfo }, response_mode: 'streaming' }),
+    body: JSON.stringify({ inputs: {
+      case_info: caseInfo,
+      health_case_info: healthCaseInfo,
+      vaccination_history_json: JSON.stringify(vaccinationPayload),
+    }, response_mode: 'streaming' }),
   });
   if (!response.ok || !response.body) throw new Error('生成失败，请稍后重试。');
 
@@ -542,7 +554,7 @@ form.addEventListener('submit', async event => {
   resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
-    const workflowResult = await runWorkflow(buildCaseInfo());
+    const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
