@@ -6,7 +6,7 @@
   <meta name="description" content="填写儿童健康与接种情况，生成疫苗推荐列表。">
   <title>儿童疫苗推荐助手 · 独立新版 v15</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23168b78%22/><text x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-size=%2234%22 fill=%22white%22>苗</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=v15-20260831">
+  <link rel="stylesheet" href="styles.css?v=v15.1-clinical">
 </head>
 <body>
   <main class="page-shell">
@@ -33,14 +33,33 @@
         </label>
 
         <label class="field full">
-          <span>主要诊断和当前病情 <b>*</b></span>
-          <input id="condition" name="condition" type="text" required maxlength="600" placeholder="例如：特应性皮炎，病情稳定，精神正常">
+          <span>主要诊断及当前健康状况 <b>*</b></span>
+          <textarea id="condition" name="condition" rows="3" required maxlength="3000" placeholder="请填写既往诊断、特殊健康状态（如哮喘、早产、室间隔缺损）及近期发热、咳嗽、流涕、腹泻、呕吐、皮疹、喘息等；尽量注明发生时间、目前是否好转和严重程度。"></textarea>
         </label>
 
         <label class="field full">
-          <span>近期用药或治疗</span>
-          <input id="treatment" name="treatment" type="text" maxlength="800" placeholder="请尽量写药名/治疗名、剂量及日期；包括化疗、免疫抑制、生物制剂、IVIG或移植等">
+          <span>近1年用药及治疗</span>
+          <textarea id="treatment" name="treatment" rows="3" maxlength="3000" placeholder="糖皮质激素、免疫抑制剂、生物制剂、化疗、放疗、输血/血液制品、IVIG等；请注明名称、剂量、使用方式、开始/结束或末次使用时间，目前是否仍在使用。无使用可填“无”，不了解可填“不清楚”。更早的移植及仍影响当前健康的治疗也请补充。"></textarea>
         </label>
+
+        <section class="field full report-field">
+          <label for="immune-results">免疫功能及相关检查结果</label>
+          <textarea id="immune-results" name="immune-results" rows="4" maxlength="6000" placeholder="可填写血常规、免疫球蛋白/体液免疫、淋巴细胞亚群/细胞免疫等结果；请附检查日期、数值、单位、参考范围及医生解释。未检查填“未检查”，不了解填“不清楚”。"></textarea>
+          <details class="report-import">
+            <summary>拍照 / 选择出院小结或检查报告图片</summary>
+            <p class="field-hint">支持JPG、PNG、WebP，每张不超过10MB。图片仅在本机识别，不上传、不保存；请先遮挡身份信息。核对后的文字将在生成建议时提交给Dify及模型服务。PDF请先转成图片。</p>
+            <label for="report-file">选择报告图片</label><input id="report-file" type="file" accept="image/jpeg,image/png,image/webp">
+            <label for="report-camera">拍照（支持的手机浏览器）</label><input id="report-camera" type="file" accept="image/*" capture="environment">
+            <p id="report-status" role="status" aria-live="polite"></p>
+            <div id="report-preview" hidden>
+              <label for="report-text">识别文字（请核对日期、数值、单位，删除身份信息）</label>
+              <textarea id="report-text" rows="8" maxlength="6000"></textarea>
+              <label for="report-target">文字归入</label><select id="report-target"><option value="immune-results">免疫功能及相关检查结果</option><option value="condition">主要诊断及当前健康状况</option><option value="treatment">近1年用药及治疗</option></select>
+              <button id="report-apply" type="button">已核对，加入所选字段</button>
+              <button id="report-discard" type="button">清除识别内容</button>
+            </div>
+          </details>
+        </section>
 
         <fieldset class="field full vaccine-record-field">
           <legend>接种记录 <b>*</b></legend>
@@ -68,10 +87,11 @@
 
         <label class="field full">
           <span>过敏、接种后异常反应和其他说明</span>
-          <input id="other" name="other" type="text" maxlength="800" placeholder="可填写严重过敏、接种后严重反应或补充说明；没有请填写“无”">
+          <textarea id="other" name="other" rows="3" maxlength="2000" placeholder="食物过敏、药物过敏、疫苗或疫苗成分过敏、既往疫苗接种后严重异常反应等；请注明诱因、时间、具体表现及是否急救/住院。无可填“无”，不了解可填“不清楚”。"></textarea>
         </label>
       </div>
 
+      <details class="assessment-options"><summary>评估日期（默认今天；历史病例评测可修改）</summary><label for="reference-date">本次评估日期</label><input id="reference-date" type="date" required></details>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <button id="submit-button" class="submit-button" type="submit">生成疫苗推荐列表</button>
     </form>
@@ -86,6 +106,7 @@
 
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
-  <script src="app.js?v=v15-20260831"></script>
+  <script src="clinical-inputs.js?v=v15.1-clinical"></script>
+  <script src="app.js?v=v15.1-clinical"></script>
 </body>
 </html>

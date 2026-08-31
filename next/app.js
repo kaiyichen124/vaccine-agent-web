@@ -220,14 +220,7 @@ function value(id, fallback = '无') {
 }
 
 function buildCaseInfo() {
-  return [
-    `年龄或出生日期：${value('age', '未知')}`,
-    `性别：${value('sex', '未知')}`,
-    `主要诊断和当前病情：${value('condition', '未知')}`,
-    `近期用药或治疗：${value('treatment', '未填写')}`,
-    `接种记录：${buildVaccinationRecord() || '未知'}`,
-    `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
-  ].join('\n');
+  return `${buildHealthCaseInfo()}\n接种记录：${buildVaccinationRecord() || '未知'}`;
 }
 
 function normalizeForDisplay(answer) {
@@ -360,10 +353,12 @@ function decisionCode(item) {
 
 function buildHealthCaseInfo() {
   return [
+    `评估日期：${value('reference-date', new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Shanghai'}).format(new Date()))}`,
     `年龄或出生日期：${value('age', '未知')}`,
     `性别：${value('sex', '未知')}`,
-    `主要诊断和当前病情：${value('condition', '未知')}`,
-    `近期用药或治疗：${value('treatment', '未填写')}`,
+    `主要诊断及当前健康状况：${value('condition', '未知')}`,
+    `近1年用药及治疗：${value('treatment', '未填写')}`,
+    `免疫功能及相关检查结果：${value('immune-results', '未填写')}`,
     `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
   ].join('\n');
 }
@@ -544,6 +539,14 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   errorBox.hidden = true;
   if (!form.reportValidity()) return;
+  if (form.dataset.reportBusy === 'true') {
+    errorBox.textContent = '报告图片正在本机识别，请等待完成后核对文字。'; errorBox.hidden = false; return;
+  }
+  if (document.querySelector('#report-text')?.value.trim() && !document.querySelector('#report-preview').hidden) {
+    errorBox.textContent = '报告识别文字尚未确认，请先核对并加入对应字段，或清除识别内容。';
+    errorBox.hidden = false;
+    return;
+  }
   const vaccinationRecord = buildVaccinationRecord();
   if (!vaccinationRecord) {
     errorBox.textContent = '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请勾选“接种记录不清楚”。';
@@ -562,6 +565,7 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
+    if (workflowResult.resultJson?.deployment_contract?.release !== 'v15.1-clinical-inputs') throw new Error('当前后台版本与表单不匹配，未展示旧版建议。请稍后重新打开此页面。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
