@@ -89,7 +89,7 @@ const TEXT_VACCINE_ALIASES = [
 ];
 
 function vaccinationMode() {
-  return vaccinationModeInputs.find(input => input.checked)?.value || 'TEXT';
+  return vaccinationModeInputs.find(input => input.checked)?.value || 'STRUCTURED';
 }
 
 function chineseNumber(value) {
@@ -199,20 +199,28 @@ function vaccineRecordName(item) {
 
 function renderVaccineOptions() {
   const query = vaccineSearch.value.trim().toLowerCase();
-  const groups = [...new Set(VACCINE_OPTIONS.map(item => item.group))];
-  vaccineGroups.innerHTML = groups.map(group => {
-    const items = VACCINE_OPTIONS.filter(item => item.group === group && `${item.name} ${item.keywords}`.toLowerCase().includes(query));
-    if (!items.length) return '';
-    return `<section class="vaccine-option-group"><h4>${group}</h4><div class="vaccine-option-list">${items.map(item => `
-      <label class="vaccine-option">
-        <input type="checkbox" data-vaccine-id="${item.id}" ${vaccineRecordState.has(item.id) ? 'checked' : ''}>
-        <span>${item.name}</span>
-      </label>`).join('')}</div></section>`;
-  }).join('') || '<p class="empty-selection">没有找到匹配的疫苗。</p>';
+  if (!query) {
+    vaccineGroups.innerHTML = '<p class="empty-selection">输入名称后会自动显示匹配疫苗，不再展开整张疫苗目录。</p>';
+    return;
+  }
+  const items = VACCINE_OPTIONS
+    .filter(item => `${item.name} ${item.keywords}`.toLowerCase().includes(query))
+    .slice(0, 8);
+  vaccineGroups.innerHTML = items.length
+    ? `<div class="vaccine-suggestion-list" role="listbox">${items.map(item => {
+      const added = vaccineRecordState.has(item.id);
+      return `<button type="button" class="vaccine-suggestion" data-vaccine-id="${item.id}" ${added ? 'disabled' : ''}>
+        <span>${item.name}</span><small>${added ? '已添加' : item.group}</small>
+      </button>`;
+    }).join('')}</div>`
+    : '<p class="empty-selection">没有找到匹配疫苗，可尝试输入简称、英文缩写或价型。</p>';
 
-  vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(input => input.addEventListener('change', () => {
-    if (input.checked) vaccineRecordState.set(input.dataset.vaccineId, createEmptyVaccineRecord(input.dataset.vaccineId));
-    else vaccineRecordState.delete(input.dataset.vaccineId);
+  vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(button => button.addEventListener('click', () => {
+    if (!vaccineRecordState.has(button.dataset.vaccineId)) {
+      vaccineRecordState.set(button.dataset.vaccineId, createEmptyVaccineRecord(button.dataset.vaccineId));
+    }
+    vaccineSearch.value = '';
+    renderVaccineOptions();
     renderSelectedVaccineRecords();
   }));
 }
@@ -237,7 +245,7 @@ function renderSelectedVaccineRecords() {
     </select></label>` : '';
     return `<div class="selected-vaccine-row" data-record-id="${id}">
       <div class="selected-vaccine-main">
-      <strong class="selected-vaccine-name">${item.name}</strong>
+      <div class="selected-vaccine-title"><strong class="selected-vaccine-name">${item.name}</strong><button type="button" data-remove-record="${id}">移除</button></div>
       <label><span>接种状态</span><select data-record-field="status">
         <option value="VACCINATED" ${record.status === 'VACCINATED' ? 'selected' : ''}>已接种</option>
         <option value="COMPLETED" ${record.status === 'COMPLETED' ? 'selected' : ''}>已完成全程</option>
@@ -266,6 +274,11 @@ function renderSelectedVaccineRecords() {
     const row = input.closest('[data-record-id]');
     const record = vaccineRecordState.get(row.dataset.recordId);
     record.doseDates[Number(input.dataset.doseDateIndex)] = input.value;
+  }));
+  selectedVaccineRecords.querySelectorAll('[data-remove-record]').forEach(button => button.addEventListener('click', () => {
+    vaccineRecordState.delete(button.dataset.removeRecord);
+    renderVaccineOptions();
+    renderSelectedVaccineRecords();
   }));
 }
 

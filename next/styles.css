@@ -83,6 +83,11 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .vaccine-selector.is-disabled { opacity: .52; pointer-events: none; }
 .vaccine-search-label { color: #344054; font-size: 13px; font-weight: 600; }
 .vaccine-option-groups { display: grid; gap: 14px; }
+.vaccine-suggestion-list { display: grid; gap: 7px; padding: 6px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
+.vaccine-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 10px 12px; border: 0; border-radius: 5px; background: #fff; color: #17324d; text-align: left; cursor: pointer; }
+.vaccine-suggestion:hover, .vaccine-suggestion:focus-visible { background: #eef5fb; outline: none; }
+.vaccine-suggestion small { color: #667085; font-size: 12px; }
+.vaccine-suggestion:disabled { background: #f2f4f7; color: #98a2b3; cursor: default; }
 .vaccine-option-group { display: grid; gap: 8px; }
 .vaccine-option-group h3 { margin: 0; color: #344054; font-size: 14px; }
 .vaccine-options { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -96,6 +101,8 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .empty-selection { margin: 0; color: #7a8596; font-size: 13px; }
 .selected-vaccine-row { display: grid; gap: 12px; padding: 12px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
 .selected-vaccine-main { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(145px, 1fr) 105px minmax(190px, 1.35fr); gap: 8px; align-items: end; }
+.selected-vaccine-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; align-self: center; }
+.selected-vaccine-title button { border: 0; background: transparent; color: #8b3a3a; font-size: 12px; cursor: pointer; }
 .selected-vaccine-name { align-self: center; color: #17324d; font-size: 14px; font-weight: 700; }
 .selected-vaccine-row label { display: grid; gap: 5px; color: #667085; font-size: 12px; }
 .selected-vaccine-row select, .selected-vaccine-row input { height: 38px; padding: 0 9px; font-size: 13px; }
