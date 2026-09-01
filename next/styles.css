@@ -72,6 +72,10 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .record-mode-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
 .record-mode-row label { display: inline-flex; align-items: center; gap: 7px; color: #24364b; font-size: 14px; font-weight: 600; cursor: pointer; }
 .record-mode-row input { width: 17px; height: 17px; margin: 0; accent-color: #1f4e79; }
+.history-complete-option { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: #24364b; font-size: 13px; font-weight: 600; cursor: pointer; }
+.history-complete-option[hidden] { display: none !important; }
+.history-complete-option input { width: 17px; height: 17px; margin: 0; accent-color: #1f4e79; }
+.history-complete-option small { color: #667085; font-size: 12px; font-weight: 400; }
 .record-unknown-option { display: inline-flex; align-items: center; gap: 8px; color: #24364b; font-size: 14px; font-weight: 600; cursor: pointer; }
 .record-unknown-option input { width: 17px; height: 17px; margin: 0; accent-color: #1f4e79; }
 .record-mode-hint { color: #7a8596; font-size: 13px; font-weight: 400; }

@@ -6,7 +6,7 @@
   <meta name="description" content="填写儿童健康与接种情况，生成疫苗推荐列表。">
   <title>儿童疫苗推荐助手</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23168b78%22/><text x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-size=%2234%22 fill=%22white%22>苗</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=v15.5-scroll-autocomplete">
+  <link rel="stylesheet" href="styles.css?v=v15.6-complete-history">
 </head>
 <body>
   <main class="page-shell">
@@ -68,6 +68,7 @@
             <label><input type="radio" name="vaccination-mode" value="TEXT"> 批量粘贴接种记录</label>
             <label><input type="radio" name="vaccination-mode" value="UNKNOWN"> 接种记录不清楚</label>
           </div>
+          <label id="history-complete-option" class="history-complete-option"><input id="history-complete" type="checkbox"> 已按接种证完整录入 <small>未列项目按接种证无记录处理</small></label>
           <div id="vaccination-text-panel" class="vaccination-text-panel" hidden>
             <label for="vaccination-extra">直接粘贴或输入接种记录</label>
             <textarea id="vaccination-extra" rows="7" maxlength="5000" placeholder="建议每种疫苗一行，例如：&#10;乙肝：第1剂 2024-01-15；第2剂 2024-02-15；第3剂 2024-07-15&#10;IPV：第1剂 2024-03-15；第2剂 2024-04-15&#10;百白破：第1剂 2024-03-15；第2剂 2024-05-15；第3剂 2024-07-15；第4剂未接种"></textarea>
@@ -106,6 +107,6 @@
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
   <script src="clinical-inputs.js?v=v15.1-clinical"></script>
-  <script src="app.js?v=v15.5-full-autocomplete"></script>
+  <script src="app.js?v=v15.6-complete-history"></script>
 </body>
 </html>

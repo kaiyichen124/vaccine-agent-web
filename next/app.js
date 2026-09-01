@@ -48,6 +48,8 @@ const vaccineSearch = document.querySelector('#vaccine-search');
 const vaccinationModeInputs = [...document.querySelectorAll('[name="vaccination-mode"]')];
 const vaccinationTextPanel = document.querySelector('#vaccination-text-panel');
 const vaccineSelector = document.querySelector('#vaccine-selector');
+const historyCompleteOption = document.querySelector('#history-complete-option');
+const historyComplete = document.querySelector('#history-complete');
 const vaccinationExtra = document.querySelector('#vaccination-extra');
 const vaccinationHidden = document.querySelector('#vaccination');
 const vaccineRecordState = new Map();
@@ -87,6 +89,45 @@ const TEXT_VACCINE_ALIASES = [
   ['hpv4', '四价HPV疫苗', ['四价HPV', '4价HPV']],
   ['hpv9', '九价HPV疫苗', ['九价HPV', '9价HPV']],
 ];
+
+const COMPLETE_HISTORY_FAMILIES = [
+  { id: 'hep_b', name: '乙肝疫苗', coveredBy: ['hep_b', 'six_in_one', 'hep_ab'] },
+  { id: 'bcg', name: '卡介苗', coveredBy: ['bcg'] },
+  { id: 'polio', name: '脊灰疫苗', coveredBy: ['polio', 'ipv', 'bopv', 'five_in_one', 'six_in_one'] },
+  { id: 'dtap', name: '百白破疫苗', coveredBy: ['dtap', 'four_in_one', 'five_in_one', 'six_in_one'] },
+  { id: 'dt', name: '白破疫苗', coveredBy: ['dt'] },
+  { id: 'mmr', name: '麻腮风疫苗', coveredBy: ['mmr'] },
+  { id: 'je', name: '乙脑疫苗', coveredBy: ['je', 'je_live', 'je_inactivated'] },
+  { id: 'meningococcal', name: '流脑疫苗', coveredBy: ['meningococcal', 'mpsv_a', 'mpsv_ac', 'mpcv_ac', 'mpsv_acyw', 'mpcv_acyw', 'men_hib'] },
+  { id: 'hep_a', name: '甲肝疫苗', coveredBy: ['hep_a', 'hep_a_live', 'hep_a_inactivated', 'hep_ab'] },
+  { id: 'hpv_nip', name: 'HPV疫苗', coveredBy: ['hpv_nip', 'hpv2_nip', 'hpv4', 'hpv9'] },
+  { id: 'flu', name: '流感疫苗', coveredBy: ['flu'] },
+  { id: 'varicella', name: '水痘疫苗', coveredBy: ['varicella'] },
+  { id: 'pcv', name: '肺炎球菌结合疫苗', coveredBy: ['pcv'] },
+  { id: 'ppsv23', name: '23价肺炎球菌多糖疫苗', coveredBy: ['ppsv23'] },
+  { id: 'hib', name: 'Hib疫苗', coveredBy: ['hib', 'four_in_one', 'five_in_one', 'six_in_one', 'men_hib'] },
+  { id: 'rotavirus', name: '轮状病毒疫苗', coveredBy: ['rotavirus'] },
+  { id: 'ev71', name: 'EV71灭活疫苗', coveredBy: ['ev71'] },
+];
+
+function addConfirmedMissingHistory(events) {
+  if (!historyComplete.checked) return events;
+  const present = new Set(events.map(event => event.product_id));
+  const missing = COMPLETE_HISTORY_FAMILIES
+    .filter(family => !family.coveredBy.some(id => present.has(id)))
+    .map(family => ({
+      event_id: `confirmed-missing-${family.id}`,
+      product_id: family.id,
+      display_name: family.name,
+      history_state: 'EXPLICIT_MISSING',
+      dose_count: 0,
+      doses: [],
+      influenza_season: family.id === 'flu' ? currentInfluenzaSeason() : null,
+      current_season_status: family.id === 'flu' ? 'NOT_VACCINATED' : null,
+      source: 'STRUCTURED_UI',
+    }));
+  return [...events, ...missing];
+}
 
 function vaccinationMode() {
   return vaccinationModeInputs.find(input => input.checked)?.value || 'STRUCTURED';
@@ -288,7 +329,7 @@ function buildVaccinationPayload() {
     return {
       schema_version: 'vaccination_history_v2',
       record_state: rawText ? 'PARTIAL' : 'EMPTY',
-      events: parsed.events,
+      events: addConfirmedMissingHistory(parsed.events),
       free_text: parsed.unparsed.join('；'),
       raw_text: rawText,
     };
@@ -318,7 +359,7 @@ function buildVaccinationPayload() {
   return {
     schema_version: 'vaccination_history_v2',
     record_state: events.length ? 'PARTIAL' : 'EMPTY',
-    events,
+    events: addConfirmedMissingHistory(events),
     free_text: '',
   };
 }
@@ -326,7 +367,7 @@ function buildVaccinationPayload() {
 function buildVaccinationRecord() {
   const mode = vaccinationMode();
   if (mode === 'UNKNOWN') return '接种记录不清楚';
-  if (mode === 'TEXT') return vaccinationExtra.value.trim();
+  if (mode === 'TEXT') return [vaccinationExtra.value.trim(), historyComplete.checked ? '以上为接种证全部记录，未列项目无接种记录' : ''].filter(Boolean).join('；');
   const records = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
     const name = vaccineRecordName(item);
@@ -343,6 +384,7 @@ function buildVaccinationRecord() {
     }
     return text;
   });
+  if (historyComplete.checked) records.push('以上为接种证全部记录，未列项目无接种记录');
   return records.join('；');
 }
 
@@ -351,6 +393,8 @@ function renderVaccinationMode() {
   const mode = vaccinationMode();
   vaccinationTextPanel.hidden = mode !== 'TEXT';
   vaccineSelector.hidden = mode !== 'STRUCTURED';
+  historyCompleteOption.hidden = mode === 'UNKNOWN';
+  if (mode === 'UNKNOWN') historyComplete.checked = false;
 }
 vaccinationModeInputs.forEach(input => input.addEventListener('change', renderVaccinationMode));
 
