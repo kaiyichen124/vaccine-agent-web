@@ -199,13 +199,8 @@ function vaccineRecordName(item) {
 
 function renderVaccineOptions() {
   const query = vaccineSearch.value.trim().toLowerCase();
-  if (!query) {
-    vaccineGroups.innerHTML = '<p class="empty-selection">输入名称后会自动显示匹配疫苗，不再展开整张疫苗目录。</p>';
-    return;
-  }
   const items = VACCINE_OPTIONS
-    .filter(item => `${item.name} ${item.keywords}`.toLowerCase().includes(query))
-    .slice(0, 8);
+    .filter(item => !query || `${item.name} ${item.keywords}`.toLowerCase().includes(query));
   vaccineGroups.innerHTML = items.length
     ? `<div class="vaccine-suggestion-list" role="listbox">${items.map(item => {
       const added = vaccineRecordState.has(item.id);
@@ -213,7 +208,7 @@ function renderVaccineOptions() {
         <span>${item.name}</span><small>${added ? '已添加' : item.group}</small>
       </button>`;
     }).join('')}</div>`
-    : '<p class="empty-selection">没有找到匹配疫苗，可尝试输入简称、英文缩写或价型。</p>';
+    : '<p class="empty-selection">没有找到匹配疫苗，可尝试输入中文名、简称、英文缩写或价型。</p>';
 
   vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(button => button.addEventListener('click', () => {
     if (!vaccineRecordState.has(button.dataset.vaccineId)) {

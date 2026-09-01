@@ -83,7 +83,7 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .vaccine-selector.is-disabled { opacity: .52; pointer-events: none; }
 .vaccine-search-label { color: #344054; font-size: 13px; font-weight: 600; }
 .vaccine-option-groups { display: grid; gap: 14px; }
-.vaccine-suggestion-list { display: grid; gap: 7px; padding: 6px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
+.vaccine-suggestion-list { display: grid; gap: 7px; max-height: 340px; overflow-y: auto; padding: 6px; border: 1px solid #d8e0e9; border-radius: 6px; background: #fff; }
 .vaccine-suggestion { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 10px 12px; border: 0; border-radius: 5px; background: #fff; color: #17324d; text-align: left; cursor: pointer; }
 .vaccine-suggestion:hover, .vaccine-suggestion:focus-visible { background: #eef5fb; outline: none; }
 .vaccine-suggestion small { color: #667085; font-size: 12px; }
