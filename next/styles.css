@@ -70,9 +70,15 @@ h1 { margin-bottom: 6px; color: #17324d; font-size: clamp(24px, 4vw, 31px); font
 .vaccine-record-field legend { margin-bottom: 8px; color: #344054; font-size: 14px; font-weight: 600; }
 .vaccine-record-field legend b { color: #d64545; }
 .record-mode-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+.record-mode-row label { display: inline-flex; align-items: center; gap: 7px; color: #24364b; font-size: 14px; font-weight: 600; cursor: pointer; }
+.record-mode-row input { width: 17px; height: 17px; margin: 0; accent-color: #1f4e79; }
 .record-unknown-option { display: inline-flex; align-items: center; gap: 8px; color: #24364b; font-size: 14px; font-weight: 600; cursor: pointer; }
 .record-unknown-option input { width: 17px; height: 17px; margin: 0; accent-color: #1f4e79; }
 .record-mode-hint { color: #7a8596; font-size: 13px; font-weight: 400; }
+.vaccination-text-panel { display: grid; gap: 8px; margin-top: 10px; padding: 16px; border: 1px solid #d9e0e8; border-radius: 7px; background: #f8fafc; }
+.vaccination-text-panel[hidden], .vaccine-selector[hidden] { display: none !important; }
+.vaccination-text-panel > label { color: #344054; font-size: 13px; font-weight: 600; }
+.vaccination-text-panel textarea { min-height: 170px; background: #fff; }
 .vaccine-selector { display: grid; gap: 14px; margin-top: 8px; padding: 16px; border: 1px solid #d9e0e8; border-radius: 7px; background: #f8fafc; }
 .vaccine-selector.is-disabled { opacity: .52; pointer-events: none; }
 .vaccine-search-label { color: #344054; font-size: 13px; font-weight: 600; }

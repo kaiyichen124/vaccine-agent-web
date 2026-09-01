@@ -45,10 +45,133 @@ const VACCINE_OPTIONS = [
 const vaccineGroups = document.querySelector('#vaccine-option-groups');
 const selectedVaccineRecords = document.querySelector('#selected-vaccine-records');
 const vaccineSearch = document.querySelector('#vaccine-search');
-const vaccinationUnknown = document.querySelector('#vaccination-unknown');
+const vaccinationModeInputs = [...document.querySelectorAll('[name="vaccination-mode"]')];
+const vaccinationTextPanel = document.querySelector('#vaccination-text-panel');
+const vaccineSelector = document.querySelector('#vaccine-selector');
 const vaccinationExtra = document.querySelector('#vaccination-extra');
 const vaccinationHidden = document.querySelector('#vaccination');
 const vaccineRecordState = new Map();
+
+const TEXT_VACCINE_ALIASES = [
+  ['mpsv_acyw', 'ACYW群流脑多糖疫苗', ['MPSV-ACYW', 'ACYW群流脑多糖', 'ACYW135群流脑多糖']],
+  ['mpcv_acyw', 'ACYW群流脑结合疫苗', ['MPCV-ACYW', 'ACYW群流脑结合', 'ACYW135群流脑结合']],
+  ['mpsv_ac', 'A群C群流脑多糖疫苗', ['MPSV-AC', 'A群C群流脑多糖', 'AC群流脑多糖']],
+  ['mpcv_ac', 'A群C群流脑结合疫苗', ['MPCV-AC', 'A群C群流脑结合', 'AC群流脑结合']],
+  ['mpsv_a', 'A群流脑多糖疫苗', ['MPSV-A', 'A群流脑多糖', 'A群流脑']],
+  ['je_inactivated', '乙脑灭活疫苗', ['JE-I', '乙脑灭活']],
+  ['je_live', '乙脑减毒活疫苗', ['JE-L', '乙脑减毒活', '乙脑活疫苗']],
+  ['hep_a_inactivated', '甲肝灭活疫苗', ['HepA-I', '甲肝灭活']],
+  ['hep_a_live', '甲肝减毒活疫苗', ['HepA-L', '甲肝减毒活', '甲肝活疫苗']],
+  ['five_in_one', '五联疫苗', ['五联疫苗', '五联']],
+  ['four_in_one', '四联疫苗', ['四联疫苗', '四联']],
+  ['six_in_one', '六联疫苗', ['六联疫苗', '六联']],
+  ['hep_b', '乙肝疫苗', ['HepB', '乙肝疫苗', '乙肝']],
+  ['bcg', '卡介苗', ['BCG', '卡介苗']],
+  ['bopv', '脊灰减毒活疫苗（bOPV）', ['bOPV', 'OPV', '脊灰减毒活']],
+  ['ipv', '脊灰灭活疫苗（IPV）', ['IPV', '脊灰灭活']],
+  ['polio', '脊灰疫苗', ['脊髓灰质炎疫苗', '脊灰疫苗', '脊灰']],
+  ['dtap', '百白破疫苗', ['DTaP', '百白破疫苗', '百白破']],
+  ['dt', '白破疫苗（DT）', ['白破疫苗', '白破', 'DT']],
+  ['mmr', '麻腮风疫苗', ['MMR', '麻腮风疫苗', '麻腮风']],
+  ['hep_a', '甲肝疫苗', ['甲肝疫苗', '甲肝']],
+  ['je', '乙脑疫苗', ['乙脑疫苗', '乙脑']],
+  ['meningococcal', '流脑疫苗', ['流脑疫苗', '流脑']],
+  ['flu', '流感疫苗', ['流感疫苗', '流感']],
+  ['varicella', '水痘疫苗', ['水痘疫苗', '水痘']],
+  ['pcv', '肺炎球菌结合疫苗', ['肺炎球菌结合', '肺炎疫苗', 'PCV']],
+  ['ppsv23', '23价肺炎球菌多糖疫苗', ['23价肺炎', 'PPSV23']],
+  ['hib', 'Hib疫苗', ['Hib疫苗', 'Hib']],
+  ['rotavirus', '轮状病毒疫苗', ['轮状病毒疫苗', '轮状疫苗', '轮状']],
+  ['ev71', 'EV71灭活疫苗', ['EV71', '手足口疫苗']],
+  ['hpv2_nip', '国家免疫规划双价HPV疫苗', ['双价HPV', '2价HPV']],
+  ['hpv4', '四价HPV疫苗', ['四价HPV', '4价HPV']],
+  ['hpv9', '九价HPV疫苗', ['九价HPV', '9价HPV']],
+];
+
+function vaccinationMode() {
+  return vaccinationModeInputs.find(input => input.checked)?.value || 'TEXT';
+}
+
+function chineseNumber(value) {
+  if (/^\d+$/.test(value)) return Number(value);
+  const digits = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (value === '十') return 10;
+  if (value.includes('十')) {
+    const [left, right] = value.split('十');
+    return (left ? digits[left] : 1) * 10 + (right ? digits[right] : 0);
+  }
+  return digits[value] ?? null;
+}
+
+function normalizedDate(value) {
+  const match = String(value || '').match(/(20\d{2})[.\/年-](\d{1,2})[.\/月-](\d{1,2})(?:日)?/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function textVaccine(segment) {
+  const lower = segment.toLowerCase();
+  for (const [id, displayName, aliases] of TEXT_VACCINE_ALIASES) {
+    if (aliases.some(alias => lower.includes(alias.toLowerCase()))) return { id, displayName };
+  }
+  return null;
+}
+
+function parseVaccinationText(text) {
+  const segments = text.replace(/；/g, ';').split(/[;\n]+/).map(value => value.trim()).filter(Boolean);
+  const byProduct = new Map();
+  const unparsed = [];
+  for (const segment of segments) {
+    const vaccine = textVaccine(segment);
+    if (!vaccine) { unparsed.push(segment); continue; }
+    const existing = byProduct.get(vaccine.id) || { id: vaccine.id, displayName: vaccine.displayName, doses: new Map(), complete: false, explicitMissing: false, source: [] };
+    existing.source.push(segment);
+    existing.explicitMissing ||= /(?:明确)?未接种|未打|从未接种/.test(segment) && !/第\s*[0-9一二三四五六七八九十两]+\s*(?:剂|针)/.test(segment);
+    existing.complete ||= /全程(?:已)?完成|已完成全程/.test(segment);
+
+    const range = segment.match(/第\s*([0-9一二三四五六七八九十两]+)\s*[-—~至到]\s*([0-9一二三四五六七八九十两]+)\s*(?:剂|针)[^；;。]*?(?:已)?完成/);
+    if (range) {
+      const start = chineseNumber(range[1]);
+      const end = chineseNumber(range[2]);
+      if (start && end && end >= start) for (let number = start; number <= end; number += 1) existing.doses.set(number, existing.doses.get(number) || null);
+    }
+
+    const markers = [...segment.matchAll(/第?\s*([0-9一二三四五六七八九十两]+)\s*(?:剂|针)/g)];
+    markers.forEach((marker, index) => {
+      const number = chineseNumber(marker[1]);
+      if (!number) return;
+      const context = segment.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? segment.length);
+      if (/未接种|漏种|未打|缺种/.test(context)) return;
+      existing.doses.set(number, normalizedDate(context) || existing.doses.get(number) || null);
+    });
+
+    const counted = segment.match(/(?:^|[：:\s])([0-9一二三四五六七八九十两]+)\s*(?:剂|针)\s*(?:已)?完成/);
+    if (counted && !segment.includes('第')) {
+      const count = chineseNumber(counted[1]);
+      if (count) for (let number = 1; number <= count; number += 1) existing.doses.set(number, existing.doses.get(number) || null);
+      existing.complete = true;
+    }
+    if (!existing.doses.size && /已接种|已完成/.test(segment)) existing.doses.set(1, normalizedDate(segment));
+    byProduct.set(vaccine.id, existing);
+  }
+
+  const events = [...byProduct.values()].map(record => {
+    const doses = [...record.doses.entries()].sort((a, b) => a[0] - b[0]).map(([doseNumber, dateValue]) => ({ dose_number: doseNumber, date: dateValue }));
+    const onlyMissing = record.explicitMissing && !doses.length;
+    return {
+      event_id: `text-${record.id}`,
+      product_id: record.id,
+      display_name: record.displayName,
+      history_state: onlyMissing ? 'EXPLICIT_MISSING' : record.complete ? 'COMPLETE' : doses.length ? 'COUNTED' : 'ANY_DOSE',
+      dose_count: onlyMissing ? 0 : doses.length || null,
+      doses,
+      source: 'STRUCTURED_UI',
+      source_text: record.source.join('；'),
+    };
+  });
+  return { events, unparsed };
+}
 
 function currentInfluenzaSeason() {
   const now = new Date();
@@ -147,8 +270,20 @@ function renderSelectedVaccineRecords() {
 }
 
 function buildVaccinationPayload() {
-  if (vaccinationUnknown.checked) {
+  const mode = vaccinationMode();
+  if (mode === 'UNKNOWN') {
     return { schema_version: 'vaccination_history_v2', record_state: 'UNKNOWN', events: [], free_text: '' };
+  }
+  if (mode === 'TEXT') {
+    const rawText = vaccinationExtra.value.trim();
+    const parsed = parseVaccinationText(rawText);
+    return {
+      schema_version: 'vaccination_history_v2',
+      record_state: rawText ? 'PARTIAL' : 'EMPTY',
+      events: parsed.events,
+      free_text: parsed.unparsed.join('；'),
+      raw_text: rawText,
+    };
   }
   const events = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
@@ -174,14 +309,16 @@ function buildVaccinationPayload() {
   });
   return {
     schema_version: 'vaccination_history_v2',
-    record_state: events.length || vaccinationExtra.value.trim() ? 'PARTIAL' : 'EMPTY',
+    record_state: events.length ? 'PARTIAL' : 'EMPTY',
     events,
-    free_text: vaccinationExtra.value.trim(),
+    free_text: '',
   };
 }
 
 function buildVaccinationRecord() {
-  if (vaccinationUnknown.checked) return '接种记录不清楚';
+  const mode = vaccinationMode();
+  if (mode === 'UNKNOWN') return '接种记录不清楚';
+  if (mode === 'TEXT') return vaccinationExtra.value.trim();
   const records = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
     const name = vaccineRecordName(item);
@@ -198,21 +335,20 @@ function buildVaccinationRecord() {
     }
     return text;
   });
-  const extra = vaccinationExtra.value.trim();
-  if (extra) records.push(extra);
   return records.join('；');
 }
 
 vaccineSearch.addEventListener('input', renderVaccineOptions);
-vaccinationUnknown.addEventListener('change', () => {
-  document.querySelector('.vaccine-selector').classList.toggle('is-disabled', vaccinationUnknown.checked);
-  vaccineSearch.disabled = vaccinationUnknown.checked;
-  vaccinationExtra.disabled = vaccinationUnknown.checked;
-  vaccineGroups.querySelectorAll('input').forEach(input => { input.disabled = vaccinationUnknown.checked; });
-});
+function renderVaccinationMode() {
+  const mode = vaccinationMode();
+  vaccinationTextPanel.hidden = mode !== 'TEXT';
+  vaccineSelector.hidden = mode !== 'STRUCTURED';
+}
+vaccinationModeInputs.forEach(input => input.addEventListener('change', renderVaccinationMode));
 
 renderVaccineOptions();
 renderSelectedVaccineRecords();
+renderVaccinationMode();
 
 function value(id, fallback = '无') {
   const text = document.querySelector(`#${id}`)?.value?.trim() || '';
@@ -549,7 +685,9 @@ form.addEventListener('submit', async event => {
   }
   const vaccinationRecord = buildVaccinationRecord();
   if (!vaccinationRecord) {
-    errorBox.textContent = '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请勾选“接种记录不清楚”。';
+    errorBox.textContent = vaccinationMode() === 'TEXT'
+      ? '请粘贴或输入接种记录；如果完全不清楚，请选择“接种记录不清楚”。'
+      : '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请选择“接种记录不清楚”。';
     errorBox.hidden = false;
     document.querySelector('.vaccine-record-field').scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;

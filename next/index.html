@@ -64,13 +64,16 @@
         <fieldset class="field full vaccine-record-field">
           <legend>接种记录 <b>*</b></legend>
           <div class="record-mode-row">
-            <label class="record-unknown-option">
-              <input id="vaccination-unknown" type="checkbox">
-              <span>接种记录不清楚</span>
-            </label>
-            <span class="record-mode-hint">可搜索并选择已经接种、明确未接种或需要核对的疫苗。</span>
+            <label><input type="radio" name="vaccination-mode" value="TEXT" checked> 直接输入文本</label>
+            <label><input type="radio" name="vaccination-mode" value="STRUCTURED"> 逐项选择</label>
+            <label><input type="radio" name="vaccination-mode" value="UNKNOWN"> 接种记录不清楚</label>
           </div>
-          <div id="vaccine-selector" class="vaccine-selector">
+          <div id="vaccination-text-panel" class="vaccination-text-panel">
+            <label for="vaccination-extra">直接粘贴或输入接种记录</label>
+            <textarea id="vaccination-extra" rows="7" maxlength="5000" placeholder="建议每种疫苗一行，例如：&#10;乙肝：第1剂 2024-01-15；第2剂 2024-02-15；第3剂 2024-07-15&#10;IPV：第1剂 2024-03-15；第2剂 2024-04-15&#10;百白破：第1剂 2024-03-15；第2剂 2024-05-15；第3剂 2024-07-15；第4剂未接种"></textarea>
+            <p class="field-hint">尽量写“疫苗名称 + 第几剂 + 日期”。可以写“未接种、漏种、已完成全程”；不要用“出生至2岁均已完成”代替逐项记录。</p>
+          </div>
+          <div id="vaccine-selector" class="vaccine-selector" hidden>
             <label class="vaccine-search-label" for="vaccine-search">搜索疫苗</label>
             <input id="vaccine-search" type="search" placeholder="例如：乙肝、五联、流感、肺炎、水痘">
             <div id="vaccine-option-groups" class="vaccine-option-groups"></div>
@@ -78,10 +81,6 @@
               <p class="empty-selection">尚未选择疫苗。</p>
             </div>
           </div>
-          <label class="record-supplement" for="vaccination-extra">
-            <span>其他接种记录或整体完成情况</span>
-            <input id="vaccination-extra" type="text" maxlength="600" placeholder="例如：已完成2岁前国家免疫规划疫苗；或补充具体产品信息">
-          </label>
           <input id="vaccination" name="vaccination" type="hidden">
         </fieldset>
 
@@ -107,6 +106,6 @@
     <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
   </main>
   <script src="clinical-inputs.js?v=v15.1-clinical"></script>
-  <script src="app.js?v=v15.2-program-dates"></script>
+  <script src="app.js?v=v15.3-text-history"></script>
 </body>
 </html>
