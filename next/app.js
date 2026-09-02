@@ -1,5 +1,5 @@
 const DIFY_ORIGIN = 'https://udify.app';
-const APP_CODE = 'sx0Oi9Sbw1s9exp4';
+const APP_CODE = 'ViJcfKppen7zh0YJ';
 
 const form = document.querySelector('#case-form');
 const submitButton = document.querySelector('#submit-button');
