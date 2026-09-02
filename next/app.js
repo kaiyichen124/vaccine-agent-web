@@ -111,22 +111,8 @@ const COMPLETE_HISTORY_FAMILIES = [
 ];
 
 function addConfirmedMissingHistory(events) {
-  if (!historyComplete.checked) return events;
-  const present = new Set(events.map(event => event.product_id));
-  const missing = COMPLETE_HISTORY_FAMILIES
-    .filter(family => !family.coveredBy.some(id => present.has(id)))
-    .map(family => ({
-      event_id: `confirmed-missing-${family.id}`,
-      product_id: family.id,
-      display_name: family.name,
-      history_state: 'EXPLICIT_MISSING',
-      dose_count: 0,
-      doses: [],
-      influenza_season: family.id === 'flu' ? currentInfluenzaSeason() : null,
-      current_season_status: family.id === 'flu' ? 'NOT_VACCINATED' : null,
-      source: 'STRUCTURED_UI',
-    }));
-  return [...events, ...missing];
+  // 完整录入通过 record_state 表达；未出现项由后端在年龄和人群过滤后推导。
+  return events;
 }
 
 function vaccinationMode() {
@@ -215,7 +201,8 @@ function parseVaccinationText(text) {
 }
 
 function currentInfluenzaSeason() {
-  const now = new Date();
+  const referenceValue = document.querySelector('#reference-date')?.value;
+  const now = referenceValue ? new Date(`${referenceValue}T00:00:00`) : new Date();
   const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   return `${startYear}-${startYear + 1}`;
 }
@@ -328,7 +315,8 @@ function buildVaccinationPayload() {
     const parsed = parseVaccinationText(rawText);
     return {
       schema_version: 'vaccination_history_v2',
-      record_state: rawText ? 'PARTIAL' : 'EMPTY',
+      record_state: historyComplete.checked ? 'COMPLETE' : rawText ? 'PARTIAL' : 'EMPTY',
+      coverage_scope: historyComplete.checked ? 'VACCINATION_CERTIFICATE' : 'PROVIDED_EVENTS_ONLY',
       events: addConfirmedMissingHistory(parsed.events),
       free_text: parsed.unparsed.join('；'),
       raw_text: rawText,
@@ -358,7 +346,8 @@ function buildVaccinationPayload() {
   });
   return {
     schema_version: 'vaccination_history_v2',
-    record_state: events.length ? 'PARTIAL' : 'EMPTY',
+    record_state: historyComplete.checked ? 'COMPLETE' : events.length ? 'PARTIAL' : 'EMPTY',
+    coverage_scope: historyComplete.checked ? 'VACCINATION_CERTIFICATE' : 'PROVIDED_EVENTS_ONLY',
     events: addConfirmedMissingHistory(events),
     free_text: '',
   };
