@@ -2,7 +2,7 @@
   const cfg = window.VACCINE_AGENT_CONFIG || {};
   const origin = String(cfg.DIFY_ORIGIN || 'https://udify.app').replace(/\/$/, '');
   const appCode = String(cfg.APP_CODE || '');
-  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v15.3-safety-gates');
+  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v16-deepseek-72');
   const timeoutMs = Number(cfg.REQUEST_TIMEOUT_MS) || 120000;
 
   async function fetchWithTimeout(url, options = {}, ms = timeoutMs) {
@@ -97,9 +97,6 @@
       throw new Error(`后台版本不匹配：${actualRelease || '未知版本'}。`);
     }
 
-    // 兼容现有 v15.6 前端的版本保护；仅前端展示层改写，不改变后端结果内容。
-    resultJson.deployment_contract.actual_release = actualRelease;
-    resultJson.deployment_contract.release = 'v15.2-program-dates';
     return { answer, resultJson };
   };
 })();
