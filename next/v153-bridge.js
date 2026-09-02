@@ -2,8 +2,9 @@
   const cfg = window.VACCINE_AGENT_CONFIG || {};
   const origin = String(cfg.DIFY_ORIGIN || 'https://udify.app').replace(/\/$/, '');
   const appCode = String(cfg.APP_CODE || '');
-  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v16-deepseek-72');
+  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v16.1-deepseek-72');
   const timeoutMs = Number(cfg.REQUEST_TIMEOUT_MS) || 120000;
+  const legacyUiRelease = 'v16-deepseek-72';
 
   async function fetchWithTimeout(url, options = {}, ms = timeoutMs) {
     const controller = new AbortController();
@@ -18,7 +19,7 @@
     }
   }
 
-  async function getV153Passport() {
+  async function getV161Passport() {
     if (!appCode) throw new Error('新版 Dify 工作流尚未配置。');
     const response = await fetchWithTimeout(`${origin}/api/passport`, {
       headers: { 'X-App-Code': appCode },
@@ -29,8 +30,9 @@
     return payload.access_token;
   }
 
-  runWorkflow = async function runWorkflowV153(caseInfo, healthCaseInfo, vaccinationPayload) {
-    const passport = await getV153Passport();
+  runWorkflow = async function runWorkflowV161(caseInfo, healthCaseInfo, vaccinationPayload) {
+    const passport = await getV161Passport();
+    const historyCompleteFlag = String(vaccinationPayload && vaccinationPayload.record_state || '').toUpperCase() === 'COMPLETE' ? 'true' : 'false';
     const response = await fetchWithTimeout(`${origin}/api/workflows/run`, {
       method: 'POST',
       headers: {
@@ -43,6 +45,7 @@
           case_info: caseInfo,
           health_case_info: healthCaseInfo,
           vaccination_history_json: JSON.stringify(vaccinationPayload),
+          history_complete: historyCompleteFlag,
         },
         response_mode: 'streaming',
       }),
@@ -95,6 +98,19 @@
     const actualRelease = resultJson && resultJson.deployment_contract && resultJson.deployment_contract.release;
     if (!actualRelease || actualRelease !== expectedRelease) {
       throw new Error(`后台版本不匹配：${actualRelease || '未知版本'}。`);
+    }
+
+    // app.js 仍保留旧版发布号的前端保护判断；bridge 已先严格校验真实 v16.1 后台，
+    // 再提供一个兼容标识，避免旧判断误拦截。真实后台版本保存在 backend_release_actual。
+    if (resultJson && resultJson.deployment_contract) {
+      resultJson = {
+        ...resultJson,
+        deployment_contract: {
+          ...resultJson.deployment_contract,
+          backend_release_actual: actualRelease,
+          release: legacyUiRelease,
+        },
+      };
     }
 
     return { answer, resultJson };
