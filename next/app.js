@@ -765,7 +765,8 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
-    if (workflowResult.resultJson?.deployment_contract?.release !== 'v16.2-rag-routing') throw new Error('当前后台版本与表单不匹配，未展示旧版建议。请稍后重新打开此页面。');
+    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v16.3-deepseek-case-understanding';
+    if (workflowResult.resultJson?.deployment_contract?.release !== expectedRelease) throw new Error('当前后台版本与表单不匹配，请刷新页面后重试。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
