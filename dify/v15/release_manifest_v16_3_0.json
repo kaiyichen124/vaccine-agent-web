@@ -1,0 +1,20 @@
+{
+  "release": "v16.3.0-deepseek-case-understanding",
+  "backend_release": "v16.3-deepseek-case-understanding",
+  "schema_version": "vaccine-decision-pipeline-v16.2",
+  "knowledge_release": "user-kb-v2-20260831",
+  "workflow_nodes": 10,
+  "llm_nodes": 3,
+  "artifacts": {
+    "dify/v15/engine.py": "675041c4d78bcad8df2cdf172d7e91b472cc48d33525bf6758b8fdb9912df3f5",
+    "dify/v15/rag_audit.py": "3ffb6829c41530e78b9a31c53353aa92b8581328695d8f0ed62997a1628cd621",
+    "dify/v15/finalize.py": "fbaf0f15f2df52c576c22756cecefc5cd87048d4ee5296cd37f07c6a1a24dd46",
+    "dify/v15/output_validator.py": "60e6928ddabca4d3819eb69a122fb63de361278f03d2487e6185a66e149fe1fb",
+    "dify/v15/vaccine_agent_v16_3_deepseek.yml": "bd7a3b24bc6ec6735e988190e149f20c590633dd3be0480acc0625c0fd1bf924",
+    "frontend/next/index.html": "c9dbcc89eb1661cef41db6b6a0c9ddf70fa00b5b5f45adc90f7232eaf557191d",
+    "frontend/next/app.js": "182c47f32aa11892a98b3adb3c1b0ee6bede3e29b3225edbd6e25e028c9c4af3",
+    "frontend/next/config.js": "a97b0c73922529ded2bf1d4bce4e4181fc000763c6a8daa8130c113dc6175057",
+    "frontend/next/v153-bridge.js": "8c4c252f23a9bd4a160d43b9d3db31880e7caf4aea444394d3e5884305083a13",
+    "frontend/next/styles.css": "f94859d78a7dc43d2c23a14e6130e2bef310355ec50966d3d968f66c9b980328"
+  }
+}
