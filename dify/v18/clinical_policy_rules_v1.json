@@ -1,0 +1,130 @@
+{
+  "schema_version": "clinical-policy-rules-v1",
+  "state_priority": {
+    "ROUTINE_VACCINATION": 10,
+    "ROUTINE_CATCHUP": 20,
+    "INACTIVATED_ONLY": 30,
+    "FURTHER_EVALUATION": 40,
+    "DEFER": 50
+  },
+  "rules": [
+    {
+      "rule_id": "POL-ACTIVE-ACUTE-001",
+      "title": "中重度急性疾病或病情未恢复",
+      "priority": 100,
+      "match": {"path": "acute_status", "op": "in", "value": ["ACTIVE"]},
+      "effect": {"overall_state": "DEFER", "gate": "ACUTE_DEFER", "block": "ALL_ACTIONS"},
+      "evidence_ids": ["CN_NIP_2026"],
+      "caregiver_reason": "当前处于急性期或病情尚未恢复，先等待病情稳定后重新评估。"
+    },
+    {
+      "rule_id": "POL-CHEMO-ACTIVE-001",
+      "title": "活动期化疗",
+      "priority": 110,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "CHEMOTHERAPY"}, {"field": "status", "op": "eq", "value": "ONGOING"}]},
+      "effect": {"overall_state": "DEFER", "gate": "HIGH_RISK_ACTIVE", "block": "ALL_ACTIONS"},
+      "evidence_ids": ["CN_LEUKEMIA_2019", "CN_IMMUNOSUPPRESSANT_2019"],
+      "caregiver_reason": "当前正在化疗，接种时机需等待治疗阶段允许并由专科复核。"
+    },
+    {
+      "rule_id": "POL-STEROID-HIGH-001",
+      "title": "大剂量全身糖皮质激素",
+      "priority": 105,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "CORTICOSTEROID"}, {"field": "status", "op": "eq", "value": "ONGOING"}, {"field": "route_class", "op": "eq", "value": "SYSTEMIC"}, {"field": "intensity", "op": "eq", "value": "HIGH"}]},
+      "effect": {"overall_state": "DEFER", "gate": "HIGH_RISK_ACTIVE", "block": "ALL_ACTIONS"},
+      "evidence_ids": ["CN_IMMUNOSUPPRESSANT_2019"],
+      "caregiver_reason": "当前处于大剂量全身糖皮质激素治疗期，先由专科确认停药及恢复后的接种时机。"
+    },
+    {
+      "rule_id": "POL-HSCT-RECOVERY-001",
+      "title": "异体造血干细胞移植后免疫重建",
+      "priority": 95,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "HSCT"}]},
+      "required_facts": ["clinical_facts.immune_reconstitution_status", "clinical_facts.gvhd_status", "clinical_facts.current_immunosuppression_status"],
+      "missing_effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "ALL_ACTIONS"},
+      "effect": {"overall_state": "INACTIVATED_ONLY", "gate": "HIGH_RISK_ACTIVE", "block": "LIVE_ACTIONS"},
+      "evidence_ids": ["CN_HSCT_2019"],
+      "caregiver_reason": "移植后接种需依据移植时间、GVHD、免疫抑制治疗和免疫重建情况重新安排。"
+    },
+    {
+      "rule_id": "POL-SOT-IMMUNOSUPPRESSION-001",
+      "title": "实体器官移植后免疫抑制维持",
+      "priority": 85,
+      "match": {"all": [{"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "SOLID_ORGAN_TRANSPLANT"}]}, {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "in", "value": ["IMMUNOSUPPRESSANT", "BIOLOGIC"]}, {"field": "status", "op": "eq", "value": "ONGOING"}]}]},
+      "effect": {"overall_state": "INACTIVATED_ONLY", "gate": "HIGH_RISK_ACTIVE", "block": "LIVE_ACTIONS"},
+      "evidence_ids": ["CN_SOLID_ORGAN_TRANSPLANT_2019", "CN_IMMUNOSUPPRESSANT_2019"],
+      "caregiver_reason": "移植后仍在免疫抑制治疗，可优先评估适龄灭活疫苗，减毒活疫苗暂不直接安排。"
+    },
+    {
+      "rule_id": "POL-IMMUNOSUPPRESSANT-ONGOING-001",
+      "title": "持续免疫抑制治疗",
+      "priority": 80,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "in", "value": ["IMMUNOSUPPRESSANT", "BIOLOGIC", "IMMUNOTHERAPY"]}, {"field": "status", "op": "eq", "value": "ONGOING"}]},
+      "effect": {"overall_state": "INACTIVATED_ONLY", "gate": "HIGH_RISK_ACTIVE", "block": "LIVE_ACTIONS"},
+      "evidence_ids": ["CN_IMMUNOSUPPRESSANT_2019"],
+      "caregiver_reason": "当前存在免疫抑制治疗，可优先评估适龄灭活疫苗，减毒活疫苗需由专科复核。"
+    },
+    {
+      "rule_id": "POL-CHEMO-RECOVERY-001",
+      "title": "化疗结束后的免疫恢复",
+      "priority": 75,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "CHEMOTHERAPY"}, {"field": "status", "op": "eq", "value": "ENDED"}]},
+      "required_facts": ["clinical_facts.immune_reconstitution_status"],
+      "missing_effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "ALL_ACTIONS"},
+      "effect": {"overall_state": "ROUTINE_CATCHUP", "gate": "TARGETED_MODIFIER", "block": "NONE"},
+      "evidence_ids": ["CN_LEUKEMIA_2019"],
+      "caregiver_reason": "化疗结束后需结合免疫恢复情况重新安排既往疫苗程序。"
+    },
+    {
+      "rule_id": "POL-IVIG-KAWASAKI-001",
+      "title": "川崎病大剂量IVIG后注射类减毒活疫苗间隔",
+      "priority": 90,
+      "match": {"path": "treatments", "op": "any", "where": [{"field": "type", "op": "eq", "value": "IVIG"}]},
+      "required_facts": ["treatments.IVIG.last_date", "treatments.IVIG.dose"],
+      "missing_effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "LIVE_ACTIONS"},
+      "effect": {"overall_state": "ROUTINE_CATCHUP", "gate": "TARGETED_MODIFIER", "block": "VACCINE_TYPES_UNTIL_INTERVAL", "vaccine_ids": ["mmr", "varicella"], "interval_months": 11},
+      "evidence_ids": ["CN_IVIG_2019", "CDC_TIMING_SPACING"],
+      "caregiver_reason": "IVIG会影响部分注射类减毒活疫苗的效果，需按剂量和末次使用日期计算间隔。"
+    },
+    {
+      "rule_id": "POL-IMMUNODEFICIENCY-UNKNOWN-001",
+      "title": "免疫缺陷程度未明确",
+      "priority": 88,
+      "match": {"path": "diagnoses", "op": "any", "where": [{"field": "risk_domain", "op": "eq", "value": "PRIMARY_OR_SECONDARY_IMMUNODEFICIENCY"}]},
+      "required_facts": ["clinical_facts.immune_status"],
+      "missing_effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "ALL_ACTIONS"},
+      "effect": {"overall_state": "INACTIVATED_ONLY", "gate": "HIGH_RISK_ACTIVE", "block": "LIVE_ACTIONS"},
+      "evidence_ids": ["CN_PID_2018", "CN_CHROMOSOMAL_2019"],
+      "caregiver_reason": "免疫功能状态会直接影响减毒活疫苗安排，需要依据明确的免疫评估结果判断。"
+    },
+    {
+      "rule_id": "POL-EPILEPSY-ACTIVE-001",
+      "title": "近期反复无热惊厥或癫痫未控制",
+      "priority": 70,
+      "match": {"path": "clinical_facts.recent_seizure_status", "op": "in", "value": ["RECENT_UNCONTROLLED", "DIAGNOSIS_PENDING"]},
+      "effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "ALL_ACTIONS"},
+      "evidence_ids": ["CN_EPILEPSY_2018"],
+      "caregiver_reason": "近期仍有无热惊厥且病因未明确，先完成神经专科评估后再确定接种安排。"
+    },
+    {
+      "rule_id": "POL-INFANT-CMV-001",
+      "title": "婴儿CMV感染当前状态",
+      "priority": 72,
+      "match": {"path": "diagnoses", "op": "any", "where": [{"field": "category_id", "op": "eq", "value": "INFANT_CMV"}]},
+      "required_facts": ["clinical_facts.infection_control_status", "clinical_facts.organ_function_stability"],
+      "missing_effect": {"overall_state": "FURTHER_EVALUATION", "gate": "RISK_INFORMATION_PENDING", "block": "ALL_ACTIONS"},
+      "effect": {"overall_state": "ROUTINE_CATCHUP", "gate": "TARGETED_MODIFIER", "block": "NONE"},
+      "evidence_ids": ["CN_INFANT_CMV_2019"],
+      "caregiver_reason": "婴儿CMV感染需结合当前感染控制和受累脏器功能状态确定接种方向。"
+    },
+    {
+      "rule_id": "POL-STABLE-COVERED-001",
+      "title": "稳定的已覆盖特殊健康状态",
+      "priority": 20,
+      "match": {"all": [{"path": "diagnoses", "op": "any", "where": [{"field": "category_id", "op": "in", "value": ["PRETERM", "ASTHMA", "FOOD_ALLERGY", "CONGENITAL_HEART_DISEASE", "ECZEMA", "FEBRILE_SEIZURE", "EPILEPSY", "CEREBRAL_PALSY", "NEONATAL_INTRACRANIAL_HEMORRHAGE", "INFANT_JAUNDICE", "PERIANAL_ABSCESS", "IGA_VASCULITIS", "ANEMIA", "INHERITED_METABOLIC_DISEASE", "LIVER_DISEASE"]}]}, {"path": "clinical_facts.current_stability", "op": "in", "value": ["STABLE", "RECOVERED"]}]},
+      "effect": {"overall_state": "ROUTINE_CATCHUP", "gate": "TARGETED_MODIFIER", "block": "NONE"},
+      "evidence_ids": ["CN_SPECIAL_HEALTH_CONSENSUS"],
+      "caregiver_reason": "当前病情稳定且没有明确高风险治疗，可继续依据年龄和接种记录安排。"
+    }
+  ]
+}
