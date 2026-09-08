@@ -1,5 +1,5 @@
 const DIFY_ORIGIN = 'https://udify.app';
-const APP_CODE = 'ViJcfKppen7zh0YJ';
+const APP_CODE = 'FbBricLjnWfDAp0V';
 
 const form = document.querySelector('#case-form');
 const submitButton = document.querySelector('#submit-button');
@@ -7,6 +7,9 @@ const errorBox = document.querySelector('#form-error');
 const resultCard = document.querySelector('#result-card');
 const resultContent = document.querySelector('#result-content');
 const statusText = document.querySelector('#status-text');
+const reviewActions = document.querySelector('#review-actions');
+const researcherReviewed = document.querySelector('#researcher-reviewed');
+const printResult = document.querySelector('#print-result');
 
 const VACCINE_OPTIONS = [
   { id: 'hep_b', name: '乙肝疫苗', group: '国家免疫规划疫苗', keywords: '乙型肝炎' },
@@ -528,6 +531,16 @@ function decisionCode(item) {
   return 'COMPLETED';
 }
 
+function recommendationStatus(item) {
+  if (item.recommendation_status) return item.recommendation_status;
+  const code = decisionCode(item);
+  if (code === 'NOW_DUE') return '常规接种';
+  if (code === 'CATCHUP_DUE') return '常规补种';
+  if (code === 'TEMPORARILY_DEFERRED') return '暂缓接种';
+  if (CONDITIONAL_CODES.has(code) || INFO_CODES.has(code) || code === 'MEDICAL_REVIEW') return '需进一步评估';
+  return '';
+}
+
 function buildHealthCaseInfo() {
   return [
     `评估日期：${value('reference-date', new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Shanghai'}).format(new Date()))}`,
@@ -567,9 +580,11 @@ function renderStructuredResult(data) {
     : parentSummary.grouped_record_task
       ? '<p><strong>先核对接种证或电子接种记录。</strong>这是一个记录核对任务，不代表孩子有多项漏种。</p>'
       : '<p>目前没有需要立即处理的项目。</p>';
-  const sourceHtml = (data.sources || []).map(source => source.url
-    ? `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`
-    : `<li>${escapeHtml(source.title)}</li>`).join('');
+  const retrievedSources = Array.isArray(data.retrieved_sources) ? data.retrieved_sources : [];
+  const sourceHtml = retrievedSources.map(source => {
+    const label = [source.file_name, source.section, source.location, source.source_version].filter(Boolean).join('｜');
+    return `<li>${escapeHtml(label || source.evidence_id || '已召回原文片段')} ${source.chunk_id ? `<small>片段：${escapeHtml(source.chunk_id)}</small>` : ''}</li>`;
+  }).join('');
   const highRisk = ['HIGH_RISK_ACTIVE', 'HIGH_RISK_INFORMATION_PENDING', 'RISK_INFORMATION_PENDING', 'TARGETED_MODIFIER', 'ACUTE_DEFER'].includes(patientDecision.gate);
   const summaryParts = [`${Number(parentSummary.action_count ?? summary.action_count ?? 0)}项现在可以安排`];
   if (Number(parentSummary.conditional_count || 0)) summaryParts.push(`${Number(parentSummary.conditional_count)}项已到年龄、待满足条件`);
@@ -621,7 +636,7 @@ function renderStructuredResult(data) {
     </section>
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
-    ${sourceHtml ? `<section><h3>主要依据</h3><ul>${sourceHtml}</ul></section>` : ''}`;
+    ${sourceHtml ? `<section><h3>本次实际召回依据</h3><ul>${sourceHtml}</ul></section>` : '<section><h3>本次实际召回依据</h3><p>未记录可绑定的原文片段，相关建议需由研究者复核。</p></section>'}`;
 
   const body = resultContent.querySelector('#vaccine-table-body');
   if (!body) return;
@@ -638,7 +653,9 @@ function renderStructuredResult(data) {
     body.innerHTML = shown.map(item => {
       const code = decisionCode(item);
       const reasonLabel = item.parent_reason_label || REASON_LABELS[item.reason_code] || '接种程序判断';
-      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
+      const clinicalStatus = recommendationStatus(item);
+      const statusLabel = clinicalStatus || `程序状态：${item.program_status || item.final_state || '待核实'}`;
+      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(statusLabel)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
     }).join('') || `<tr><td colspan="2">${escapeHtml(filter === 'active' ? (parentSummary.zero_action_explanation || '当前没有已满足直接安排条件的项目，请查看待核实或评估事项。') : '该分类下暂无项目。')}</td></tr>`;
   };
   resultContent.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
@@ -672,6 +689,7 @@ async function runWorkflow(caseInfo, healthCaseInfo, vaccinationPayload) {
       case_info: caseInfo,
       health_case_info: healthCaseInfo,
       vaccination_history_json: JSON.stringify(vaccinationPayload),
+      history_complete: vaccinationPayload.record_state === 'COMPLETE' ? 'true' : 'false',
     }, response_mode: 'streaming' }),
   });
   if (!response.ok || !response.body) throw new Error('生成失败，请稍后重试。');
@@ -736,6 +754,9 @@ form.addEventListener('submit', async event => {
   vaccinationHidden.value = vaccinationRecord;
 
   submitButton.disabled = true;
+  if (reviewActions) reviewActions.hidden = true;
+  if (researcherReviewed) researcherReviewed.checked = false;
+  if (printResult) printResult.disabled = true;
   submitButton.textContent = '正在生成，请稍候…';
   resultCard.hidden = false;
   statusText.textContent = '正在生成推荐列表';
@@ -750,6 +771,7 @@ form.addEventListener('submit', async event => {
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
     if (workflowResult.resultJson?.vaccines?.length) renderStructuredResult(workflowResult.resultJson);
     else renderAnswer(answer);
+    if (reviewActions) reviewActions.hidden = false;
     statusText.textContent = '已完成';
   } catch (error) {
     statusText.textContent = '';
@@ -761,3 +783,8 @@ form.addEventListener('submit', async event => {
     submitButton.textContent = '生成疫苗推荐列表';
   }
 });
+
+researcherReviewed?.addEventListener('change', () => {
+  printResult.disabled = !researcherReviewed.checked;
+});
+printResult?.addEventListener('click', () => window.print());

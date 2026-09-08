@@ -2,9 +2,9 @@
   const cfg = window.VACCINE_AGENT_CONFIG || {};
   const origin = String(cfg.DIFY_ORIGIN || 'https://udify.app').replace(/\/$/, '');
   const appCode = String(cfg.APP_CODE || '');
-  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v16.1-deepseek-72');
+  const expectedRelease = String(cfg.BACKEND_RELEASE || 'v16.2-rag-routing');
   const timeoutMs = Number(cfg.REQUEST_TIMEOUT_MS) || 120000;
-  const legacyUiRelease = 'v16-deepseek-72';
+  const streamIdleTimeoutMs = Number(cfg.STREAM_IDLE_TIMEOUT_MS) || 30000;
 
   async function fetchWithTimeout(url, options = {}, ms = timeoutMs) {
     const controller = new AbortController();
@@ -19,7 +19,24 @@
     }
   }
 
-  async function getV161Passport() {
+  async function readWithIdleTimeout(reader, controller, ms = streamIdleTimeoutMs) {
+    let timer;
+    try {
+      return await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error('接收推荐结果超时，请稍后重试。'));
+          }, ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function getV153Passport() {
     if (!appCode) throw new Error('新版 Dify 工作流尚未配置。');
     const response = await fetchWithTimeout(`${origin}/api/passport`, {
       headers: { 'X-App-Code': appCode },
@@ -30,26 +47,35 @@
     return payload.access_token;
   }
 
-  runWorkflow = async function runWorkflowV161(caseInfo, healthCaseInfo, vaccinationPayload) {
-    const passport = await getV161Passport();
-    const historyCompleteFlag = String(vaccinationPayload && vaccinationPayload.record_state || '').toUpperCase() === 'COMPLETE' ? 'true' : 'false';
-    const response = await fetchWithTimeout(`${origin}/api/workflows/run`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-App-Code': appCode,
-        'X-App-Passport': passport,
-      },
-      body: JSON.stringify({
-        inputs: {
-          case_info: caseInfo,
-          health_case_info: healthCaseInfo,
-          vaccination_history_json: JSON.stringify(vaccinationPayload),
-          history_complete: historyCompleteFlag,
+  runWorkflow = async function runWorkflowV153(caseInfo, healthCaseInfo, vaccinationPayload) {
+    const passport = await getV153Passport();
+    const controller = new AbortController();
+    const overallTimer = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(`${origin}/api/workflows/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Code': appCode,
+          'X-App-Passport': passport,
         },
-        response_mode: 'streaming',
-      }),
-    });
+        signal: controller.signal,
+        body: JSON.stringify({
+          inputs: {
+            case_info: caseInfo,
+            health_case_info: healthCaseInfo,
+            vaccination_history_json: JSON.stringify(vaccinationPayload),
+            history_complete: vaccinationPayload.record_state === 'COMPLETE' ? 'true' : 'false',
+          },
+          response_mode: 'streaming',
+        }),
+      });
+    } catch (error) {
+      clearTimeout(overallTimer);
+      if (error && error.name === 'AbortError') throw new Error('推荐服务运行超时，请稍后重试。');
+      throw error;
+    }
 
     if (!response.ok || !response.body) {
       let detail = '';
@@ -63,54 +89,49 @@
     let answer = '';
     let resultJson = null;
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split('\n\n');
-      buffer = blocks.pop() || '';
+    try {
+      while (true) {
+        const { value, done } = await readWithIdleTimeout(reader, controller);
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
 
-      for (const block of blocks) {
-        for (const line of block.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          let event;
-          try { event = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
+        for (const block of blocks) {
+          for (const line of block.split('\n')) {
+            if (!line.startsWith('data:')) continue;
+            let event;
+            try { event = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
 
-          if (event.event === 'text_chunk' && event.data && event.data.text) answer += event.data.text;
-          if (event.event === 'workflow_finished') {
-            const outputs = (event.data && event.data.outputs) || {};
-            answer = outputs.vaccine_recommendation || outputs.text || answer;
-            if (outputs.result_json) {
-              try {
-                resultJson = typeof outputs.result_json === 'string' ? JSON.parse(outputs.result_json) : outputs.result_json;
-              } catch (_) {
-                resultJson = null;
+            if (event.event === 'text_chunk' && event.data && event.data.text) answer += event.data.text;
+            if (event.event === 'workflow_finished') {
+              const outputs = (event.data && event.data.outputs) || {};
+              answer = outputs.vaccine_recommendation || outputs.text || answer;
+              if (outputs.result_json) {
+                try {
+                  resultJson = typeof outputs.result_json === 'string' ? JSON.parse(outputs.result_json) : outputs.result_json;
+                } catch (_) {
+                  resultJson = null;
+                }
               }
+              if (event.data && event.data.status === 'failed') throw new Error(event.data.error || '生成失败');
             }
-            if (event.data && event.data.status === 'failed') throw new Error(event.data.error || '生成失败');
+            if (event.event === 'error') throw new Error(event.message || '生成失败');
           }
-          if (event.event === 'error') throw new Error(event.message || '生成失败');
         }
       }
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('推荐服务运行超时，请稍后重试。');
+      throw error;
+    } finally {
+      clearTimeout(overallTimer);
+      try { reader.releaseLock(); } catch (_) {}
     }
 
     if (!answer.trim()) throw new Error('没有收到完整结果，请重新生成。');
     const actualRelease = resultJson && resultJson.deployment_contract && resultJson.deployment_contract.release;
     if (!actualRelease || actualRelease !== expectedRelease) {
       throw new Error(`后台版本不匹配：${actualRelease || '未知版本'}。`);
-    }
-
-    // app.js 仍保留旧版发布号的前端保护判断；bridge 已先严格校验真实 v16.1 后台，
-    // 再提供一个兼容标识，避免旧判断误拦截。真实后台版本保存在 backend_release_actual。
-    if (resultJson && resultJson.deployment_contract) {
-      resultJson = {
-        ...resultJson,
-        deployment_contract: {
-          ...resultJson.deployment_contract,
-          backend_release_actual: actualRelease,
-          release: legacyUiRelease,
-        },
-      };
     }
 
     return { answer, resultJson };

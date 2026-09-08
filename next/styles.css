@@ -165,6 +165,10 @@ input:focus, select:focus {
 
 .result-card { margin-top: 22px; }
 .result-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.review-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px 0; padding: 12px 14px; border: 1px solid #d7dee8; border-radius: 7px; background: #f8fafc; }
+.review-actions label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.review-actions button { padding: 8px 14px; border: 0; border-radius: 5px; background: #1f4e79; color: #fff; cursor: pointer; }
+.review-actions button:disabled { background: #98a2b3; cursor: not-allowed; }
 #status-text { color: #1f4e79; font-size: 14px; }
 .result-content { margin-top: 20px; color: #344054; line-height: 1.75; }
 .result-content h3 { margin: 24px 0 8px; color: #17324d; font-size: 17px; }
@@ -231,4 +235,16 @@ input:focus, select:focus {
   .selected-vaccine-main { grid-template-columns: 1fr; }
   .selected-vaccine-name { grid-column: auto; }
   .dose-date-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+  body { background: #fff; }
+  .intro, .case-card, .privacy-note, .review-actions, .status-filters { display: none !important; }
+  .page-shell { width: 100%; margin: 0; }
+  .result-card { margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .result-content { color: #000; }
+  .table-wrap { overflow: visible; }
+  .result-content table { min-width: 0; }
+  .result-content tr, .result-content td, .result-content th { break-inside: avoid; }
+  a { color: #000; text-decoration: none; }
 }
