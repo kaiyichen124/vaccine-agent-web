@@ -1,5 +1,5 @@
 const DIFY_ORIGIN = 'https://udify.app';
-const APP_CODE = 'NBCkZ0LbVfbuzNla';
+const APP_CODE = 'l63CgP5Bp6mjZpRl';
 
 const form = document.querySelector('#case-form');
 const submitButton = document.querySelector('#submit-button');
@@ -535,17 +535,11 @@ function decisionCode(item) {
 
 function recommendationStatus(item) {
   if (item.recommendation_status) return item.recommendation_status;
-  if (item.final_state && !/^[A-Z_]+$/.test(item.final_state)) return item.final_state;
   const code = decisionCode(item);
   if (code === 'NOW_DUE') return '常规接种';
   if (code === 'CATCHUP_DUE') return '常规补种';
   if (code === 'TEMPORARILY_DEFERRED') return '暂缓接种';
   if (CONDITIONAL_CODES.has(code) || INFO_CODES.has(code) || code === 'MEDICAL_REVIEW') return '需进一步评估';
-  if (code === 'COMPLETED') return '已完成';
-  if (code === 'NOT_YET_DUE') return '尚未到接种时间';
-  if (code === 'CATCHUP_WINDOW_CLOSED') return '已超过接种年龄窗口';
-  if (code === 'POPULATION_NOT_APPLICABLE') return '不属于适用人群';
-  if (code === 'NO_INDICATION') return '目前无明确接种指征';
   return '';
 }
 
@@ -674,7 +668,7 @@ function renderStructuredResult(data) {
       const code = decisionCode(item);
       const reasonLabel = item.parent_reason_label || REASON_LABELS[item.reason_code] || '接种程序判断';
       const clinicalStatus = recommendationStatus(item);
-      const statusLabel = clinicalStatus || '状态待核实';
+      const statusLabel = clinicalStatus || `程序状态：${item.program_status || item.final_state || '待核实'}`;
       return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(statusLabel)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
     }).join('') || `<tr><td colspan="2">${escapeHtml(filter === 'active' ? (parentSummary.zero_action_explanation || '当前没有已满足直接安排条件的项目，请查看待核实或评估事项。') : '该分类下暂无项目。')}</td></tr>`;
   };
@@ -785,7 +779,7 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
-    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v20.0-deepseek-clinical-data-program';
+    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v21.0-single-merge';
     if (workflowResult.resultJson?.deployment_contract?.release !== expectedRelease) throw new Error('当前后台版本与表单不匹配，请刷新页面后重试。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
