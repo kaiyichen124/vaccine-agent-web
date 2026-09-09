@@ -7,6 +7,9 @@ const errorBox = document.querySelector('#form-error');
 const resultCard = document.querySelector('#result-card');
 const resultContent = document.querySelector('#result-content');
 const statusText = document.querySelector('#status-text');
+const reviewActions = document.querySelector('#review-actions');
+const researcherReviewed = document.querySelector('#researcher-reviewed');
+const printResult = document.querySelector('#print-result');
 
 const VACCINE_OPTIONS = [
   { id: 'hep_b', name: '乙肝疫苗', group: '国家免疫规划疫苗', keywords: '乙型肝炎' },
@@ -45,13 +48,164 @@ const VACCINE_OPTIONS = [
 const vaccineGroups = document.querySelector('#vaccine-option-groups');
 const selectedVaccineRecords = document.querySelector('#selected-vaccine-records');
 const vaccineSearch = document.querySelector('#vaccine-search');
-const vaccinationUnknown = document.querySelector('#vaccination-unknown');
+const vaccinationModeInputs = [...document.querySelectorAll('[name="vaccination-mode"]')];
+const vaccinationTextPanel = document.querySelector('#vaccination-text-panel');
+const vaccineSelector = document.querySelector('#vaccine-selector');
+const historyCompleteOption = document.querySelector('#history-complete-option');
+const historyComplete = document.querySelector('#history-complete');
 const vaccinationExtra = document.querySelector('#vaccination-extra');
 const vaccinationHidden = document.querySelector('#vaccination');
 const vaccineRecordState = new Map();
 
+const TEXT_VACCINE_ALIASES = [
+  ['mpsv_acyw', 'ACYW群流脑多糖疫苗', ['MPSV-ACYW', 'ACYW群流脑多糖', 'ACYW135群流脑多糖']],
+  ['mpcv_acyw', 'ACYW群流脑结合疫苗', ['MPCV-ACYW', 'ACYW群流脑结合', 'ACYW135群流脑结合']],
+  ['mpsv_ac', 'A群C群流脑多糖疫苗', ['MPSV-AC', 'A群C群流脑多糖', 'AC群流脑多糖']],
+  ['mpcv_ac', 'A群C群流脑结合疫苗', ['MPCV-AC', 'A群C群流脑结合', 'AC群流脑结合']],
+  ['mpsv_a', 'A群流脑多糖疫苗', ['MPSV-A', 'A群流脑多糖', 'A群流脑']],
+  ['je_inactivated', '乙脑灭活疫苗', ['JE-I', '乙脑灭活']],
+  ['je_live', '乙脑减毒活疫苗', ['JE-L', '乙脑减毒活', '乙脑活疫苗']],
+  ['hep_a_inactivated', '甲肝灭活疫苗', ['HepA-I', '甲肝灭活']],
+  ['hep_a_live', '甲肝减毒活疫苗', ['HepA-L', '甲肝减毒活', '甲肝活疫苗']],
+  ['five_in_one', '五联疫苗', ['五联疫苗', '五联']],
+  ['four_in_one', '四联疫苗', ['四联疫苗', '四联']],
+  ['six_in_one', '六联疫苗', ['六联疫苗', '六联']],
+  ['hep_b', '乙肝疫苗', ['HepB', '乙肝疫苗', '乙肝']],
+  ['bcg', '卡介苗', ['BCG', '卡介苗']],
+  ['bopv', '脊灰减毒活疫苗（bOPV）', ['bOPV', 'OPV', '脊灰减毒活']],
+  ['ipv', '脊灰灭活疫苗（IPV）', ['IPV', '脊灰灭活']],
+  ['polio', '脊灰疫苗', ['脊髓灰质炎疫苗', '脊灰疫苗', '脊灰']],
+  ['dtap', '百白破疫苗', ['DTaP', '百白破疫苗', '百白破']],
+  ['dt', '白破疫苗（DT）', ['白破疫苗', '白破', 'DT']],
+  ['mmr', '麻腮风疫苗', ['MMR', '麻腮风疫苗', '麻腮风']],
+  ['hep_a', '甲肝疫苗', ['甲肝疫苗', '甲肝']],
+  ['je', '乙脑疫苗', ['乙脑疫苗', '乙脑']],
+  ['meningococcal', '流脑疫苗', ['流脑疫苗', '流脑']],
+  ['flu', '流感疫苗', ['流感疫苗', '流感']],
+  ['varicella', '水痘疫苗', ['水痘疫苗', '水痘']],
+  ['pcv', '肺炎球菌结合疫苗', ['肺炎球菌结合', '肺炎疫苗', 'PCV']],
+  ['ppsv23', '23价肺炎球菌多糖疫苗', ['23价肺炎', 'PPSV23']],
+  ['hib', 'Hib疫苗', ['Hib疫苗', 'Hib']],
+  ['rotavirus', '轮状病毒疫苗', ['轮状病毒疫苗', '轮状疫苗', '轮状']],
+  ['ev71', 'EV71灭活疫苗', ['EV71', '手足口疫苗']],
+  ['hpv2_nip', '国家免疫规划双价HPV疫苗', ['双价HPV', '2价HPV']],
+  ['hpv4', '四价HPV疫苗', ['四价HPV', '4价HPV']],
+  ['hpv9', '九价HPV疫苗', ['九价HPV', '9价HPV']],
+];
+
+const COMPLETE_HISTORY_FAMILIES = [
+  { id: 'hep_b', name: '乙肝疫苗', coveredBy: ['hep_b', 'six_in_one', 'hep_ab'] },
+  { id: 'bcg', name: '卡介苗', coveredBy: ['bcg'] },
+  { id: 'polio', name: '脊灰疫苗', coveredBy: ['polio', 'ipv', 'bopv', 'five_in_one', 'six_in_one'] },
+  { id: 'dtap', name: '百白破疫苗', coveredBy: ['dtap', 'four_in_one', 'five_in_one', 'six_in_one'] },
+  { id: 'dt', name: '白破疫苗', coveredBy: ['dt'] },
+  { id: 'mmr', name: '麻腮风疫苗', coveredBy: ['mmr'] },
+  { id: 'je', name: '乙脑疫苗', coveredBy: ['je', 'je_live', 'je_inactivated'] },
+  { id: 'meningococcal', name: '流脑疫苗', coveredBy: ['meningococcal', 'mpsv_a', 'mpsv_ac', 'mpcv_ac', 'mpsv_acyw', 'mpcv_acyw', 'men_hib'] },
+  { id: 'hep_a', name: '甲肝疫苗', coveredBy: ['hep_a', 'hep_a_live', 'hep_a_inactivated', 'hep_ab'] },
+  { id: 'hpv_nip', name: 'HPV疫苗', coveredBy: ['hpv_nip', 'hpv2_nip', 'hpv4', 'hpv9'] },
+  { id: 'flu', name: '流感疫苗', coveredBy: ['flu'] },
+  { id: 'varicella', name: '水痘疫苗', coveredBy: ['varicella'] },
+  { id: 'pcv', name: '肺炎球菌结合疫苗', coveredBy: ['pcv'] },
+  { id: 'ppsv23', name: '23价肺炎球菌多糖疫苗', coveredBy: ['ppsv23'] },
+  { id: 'hib', name: 'Hib疫苗', coveredBy: ['hib', 'four_in_one', 'five_in_one', 'six_in_one', 'men_hib'] },
+  { id: 'rotavirus', name: '轮状病毒疫苗', coveredBy: ['rotavirus'] },
+  { id: 'ev71', name: 'EV71灭活疫苗', coveredBy: ['ev71'] },
+];
+
+function addConfirmedMissingHistory(events) {
+  // 完整录入通过 record_state 表达；未出现项由后端在年龄和人群过滤后推导。
+  return events;
+}
+
+function vaccinationMode() {
+  return vaccinationModeInputs.find(input => input.checked)?.value || 'STRUCTURED';
+}
+
+function chineseNumber(value) {
+  if (/^\d+$/.test(value)) return Number(value);
+  const digits = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (value === '十') return 10;
+  if (value.includes('十')) {
+    const [left, right] = value.split('十');
+    return (left ? digits[left] : 1) * 10 + (right ? digits[right] : 0);
+  }
+  return digits[value] ?? null;
+}
+
+function normalizedDate(value) {
+  const match = String(value || '').match(/(20\d{2})[.\/年-](\d{1,2})[.\/月-](\d{1,2})(?:日)?/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function textVaccine(segment) {
+  const lower = segment.toLowerCase();
+  for (const [id, displayName, aliases] of TEXT_VACCINE_ALIASES) {
+    if (aliases.some(alias => lower.includes(alias.toLowerCase()))) return { id, displayName };
+  }
+  return null;
+}
+
+function parseVaccinationText(text) {
+  const segments = text.replace(/；/g, ';').split(/[;\n]+/).map(value => value.trim()).filter(Boolean);
+  const byProduct = new Map();
+  const unparsed = [];
+  for (const segment of segments) {
+    const vaccine = textVaccine(segment);
+    if (!vaccine) { unparsed.push(segment); continue; }
+    const existing = byProduct.get(vaccine.id) || { id: vaccine.id, displayName: vaccine.displayName, doses: new Map(), complete: false, explicitMissing: false, source: [] };
+    existing.source.push(segment);
+    existing.explicitMissing ||= /(?:明确)?未接种|未打|从未接种/.test(segment) && !/第\s*[0-9一二三四五六七八九十两]+\s*(?:剂|针)/.test(segment);
+    existing.complete ||= /全程(?:已)?完成|已完成全程/.test(segment);
+
+    const range = segment.match(/第\s*([0-9一二三四五六七八九十两]+)\s*[-—~至到]\s*([0-9一二三四五六七八九十两]+)\s*(?:剂|针)[^；;。]*?(?:已)?完成/);
+    if (range) {
+      const start = chineseNumber(range[1]);
+      const end = chineseNumber(range[2]);
+      if (start && end && end >= start) for (let number = start; number <= end; number += 1) existing.doses.set(number, existing.doses.get(number) || null);
+    }
+
+    const markers = [...segment.matchAll(/第?\s*([0-9一二三四五六七八九十两]+)\s*(?:剂|针)/g)];
+    markers.forEach((marker, index) => {
+      const number = chineseNumber(marker[1]);
+      if (!number) return;
+      const context = segment.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? segment.length);
+      if (/未接种|漏种|未打|缺种/.test(context)) return;
+      existing.doses.set(number, normalizedDate(context) || existing.doses.get(number) || null);
+    });
+
+    const counted = segment.match(/(?:^|[：:\s])([0-9一二三四五六七八九十两]+)\s*(?:剂|针)\s*(?:已)?完成/);
+    if (counted && !segment.includes('第')) {
+      const count = chineseNumber(counted[1]);
+      if (count) for (let number = 1; number <= count; number += 1) existing.doses.set(number, existing.doses.get(number) || null);
+      existing.complete = true;
+    }
+    if (!existing.doses.size && /已接种|已完成/.test(segment)) existing.doses.set(1, normalizedDate(segment));
+    byProduct.set(vaccine.id, existing);
+  }
+
+  const events = [...byProduct.values()].map(record => {
+    const doses = [...record.doses.entries()].sort((a, b) => a[0] - b[0]).map(([doseNumber, dateValue]) => ({ dose_number: doseNumber, date: dateValue }));
+    const onlyMissing = record.explicitMissing && !doses.length;
+    return {
+      event_id: `text-${record.id}`,
+      product_id: record.id,
+      display_name: record.displayName,
+      history_state: onlyMissing ? 'EXPLICIT_MISSING' : record.complete ? 'COMPLETE' : doses.length ? 'COUNTED' : 'ANY_DOSE',
+      dose_count: onlyMissing ? 0 : doses.length || null,
+      doses,
+      source: 'STRUCTURED_UI',
+      source_text: record.source.join('；'),
+    };
+  });
+  return { events, unparsed };
+}
+
 function currentInfluenzaSeason() {
-  const now = new Date();
+  const referenceValue = document.querySelector('#reference-date')?.value;
+  const now = referenceValue ? new Date(`${referenceValue}T00:00:00`) : new Date();
   const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   return `${startYear}-${startYear + 1}`;
 }
@@ -76,20 +230,23 @@ function vaccineRecordName(item) {
 
 function renderVaccineOptions() {
   const query = vaccineSearch.value.trim().toLowerCase();
-  const groups = [...new Set(VACCINE_OPTIONS.map(item => item.group))];
-  vaccineGroups.innerHTML = groups.map(group => {
-    const items = VACCINE_OPTIONS.filter(item => item.group === group && `${item.name} ${item.keywords}`.toLowerCase().includes(query));
-    if (!items.length) return '';
-    return `<section class="vaccine-option-group"><h4>${group}</h4><div class="vaccine-option-list">${items.map(item => `
-      <label class="vaccine-option">
-        <input type="checkbox" data-vaccine-id="${item.id}" ${vaccineRecordState.has(item.id) ? 'checked' : ''}>
-        <span>${item.name}</span>
-      </label>`).join('')}</div></section>`;
-  }).join('') || '<p class="empty-selection">没有找到匹配的疫苗。</p>';
+  const items = VACCINE_OPTIONS
+    .filter(item => !query || `${item.name} ${item.keywords}`.toLowerCase().includes(query));
+  vaccineGroups.innerHTML = items.length
+    ? `<div class="vaccine-suggestion-list" role="listbox">${items.map(item => {
+      const added = vaccineRecordState.has(item.id);
+      return `<button type="button" class="vaccine-suggestion" data-vaccine-id="${item.id}" ${added ? 'disabled' : ''}>
+        <span>${item.name}</span><small>${added ? '已添加' : item.group}</small>
+      </button>`;
+    }).join('')}</div>`
+    : '<p class="empty-selection">没有找到匹配疫苗，可尝试输入中文名、简称、英文缩写或价型。</p>';
 
-  vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(input => input.addEventListener('change', () => {
-    if (input.checked) vaccineRecordState.set(input.dataset.vaccineId, createEmptyVaccineRecord(input.dataset.vaccineId));
-    else vaccineRecordState.delete(input.dataset.vaccineId);
+  vaccineGroups.querySelectorAll('[data-vaccine-id]').forEach(button => button.addEventListener('click', () => {
+    if (!vaccineRecordState.has(button.dataset.vaccineId)) {
+      vaccineRecordState.set(button.dataset.vaccineId, createEmptyVaccineRecord(button.dataset.vaccineId));
+    }
+    vaccineSearch.value = '';
+    renderVaccineOptions();
     renderSelectedVaccineRecords();
   }));
 }
@@ -114,7 +271,7 @@ function renderSelectedVaccineRecords() {
     </select></label>` : '';
     return `<div class="selected-vaccine-row" data-record-id="${id}">
       <div class="selected-vaccine-main">
-      <strong class="selected-vaccine-name">${item.name}</strong>
+      <div class="selected-vaccine-title"><strong class="selected-vaccine-name">${item.name}</strong><button type="button" data-remove-record="${id}">移除</button></div>
       <label><span>接种状态</span><select data-record-field="status">
         <option value="VACCINATED" ${record.status === 'VACCINATED' ? 'selected' : ''}>已接种</option>
         <option value="COMPLETED" ${record.status === 'COMPLETED' ? 'selected' : ''}>已完成全程</option>
@@ -144,11 +301,29 @@ function renderSelectedVaccineRecords() {
     const record = vaccineRecordState.get(row.dataset.recordId);
     record.doseDates[Number(input.dataset.doseDateIndex)] = input.value;
   }));
+  selectedVaccineRecords.querySelectorAll('[data-remove-record]').forEach(button => button.addEventListener('click', () => {
+    vaccineRecordState.delete(button.dataset.removeRecord);
+    renderVaccineOptions();
+    renderSelectedVaccineRecords();
+  }));
 }
 
 function buildVaccinationPayload() {
-  if (vaccinationUnknown.checked) {
+  const mode = vaccinationMode();
+  if (mode === 'UNKNOWN') {
     return { schema_version: 'vaccination_history_v2', record_state: 'UNKNOWN', events: [], free_text: '' };
+  }
+  if (mode === 'TEXT') {
+    const rawText = vaccinationExtra.value.trim();
+    const parsed = parseVaccinationText(rawText);
+    return {
+      schema_version: 'vaccination_history_v2',
+      record_state: historyComplete.checked ? 'COMPLETE' : rawText ? 'PARTIAL' : 'EMPTY',
+      coverage_scope: historyComplete.checked ? 'VACCINATION_CERTIFICATE' : 'PROVIDED_EVENTS_ONLY',
+      events: addConfirmedMissingHistory(parsed.events),
+      free_text: parsed.unparsed.join('；'),
+      raw_text: rawText,
+    };
   }
   const events = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
@@ -174,14 +349,17 @@ function buildVaccinationPayload() {
   });
   return {
     schema_version: 'vaccination_history_v2',
-    record_state: events.length || vaccinationExtra.value.trim() ? 'PARTIAL' : 'EMPTY',
-    events,
-    free_text: vaccinationExtra.value.trim(),
+    record_state: historyComplete.checked ? 'COMPLETE' : events.length ? 'PARTIAL' : 'EMPTY',
+    coverage_scope: historyComplete.checked ? 'VACCINATION_CERTIFICATE' : 'PROVIDED_EVENTS_ONLY',
+    events: addConfirmedMissingHistory(events),
+    free_text: '',
   };
 }
 
 function buildVaccinationRecord() {
-  if (vaccinationUnknown.checked) return '接种记录不清楚';
+  const mode = vaccinationMode();
+  if (mode === 'UNKNOWN') return '接种记录不清楚';
+  if (mode === 'TEXT') return [vaccinationExtra.value.trim(), historyComplete.checked ? '以上为接种证全部记录，未列项目无接种记录' : ''].filter(Boolean).join('；');
   const records = [...vaccineRecordState.entries()].map(([id, record]) => {
     const item = VACCINE_OPTIONS.find(option => option.id === id);
     const name = vaccineRecordName(item);
@@ -198,21 +376,23 @@ function buildVaccinationRecord() {
     }
     return text;
   });
-  const extra = vaccinationExtra.value.trim();
-  if (extra) records.push(extra);
+  if (historyComplete.checked) records.push('以上为接种证全部记录，未列项目无接种记录');
   return records.join('；');
 }
 
 vaccineSearch.addEventListener('input', renderVaccineOptions);
-vaccinationUnknown.addEventListener('change', () => {
-  document.querySelector('.vaccine-selector').classList.toggle('is-disabled', vaccinationUnknown.checked);
-  vaccineSearch.disabled = vaccinationUnknown.checked;
-  vaccinationExtra.disabled = vaccinationUnknown.checked;
-  vaccineGroups.querySelectorAll('input').forEach(input => { input.disabled = vaccinationUnknown.checked; });
-});
+function renderVaccinationMode() {
+  const mode = vaccinationMode();
+  vaccinationTextPanel.hidden = mode !== 'TEXT';
+  vaccineSelector.hidden = mode !== 'STRUCTURED';
+  historyCompleteOption.hidden = mode === 'UNKNOWN';
+  if (mode === 'UNKNOWN') historyComplete.checked = false;
+}
+vaccinationModeInputs.forEach(input => input.addEventListener('change', renderVaccinationMode));
 
 renderVaccineOptions();
 renderSelectedVaccineRecords();
+renderVaccinationMode();
 
 function value(id, fallback = '无') {
   const text = document.querySelector(`#${id}`)?.value?.trim() || '';
@@ -220,14 +400,7 @@ function value(id, fallback = '无') {
 }
 
 function buildCaseInfo() {
-  return [
-    `年龄或出生日期：${value('age', '未知')}`,
-    `性别：${value('sex', '未知')}`,
-    `主要诊断和当前病情：${value('condition', '未知')}`,
-    `近期用药或治疗：${value('treatment', '未填写')}`,
-    `接种记录：${buildVaccinationRecord() || '未知'}`,
-    `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
-  ].join('\n');
+  return `${buildHealthCaseInfo()}\n接种记录：${buildVaccinationRecord() || '未知'}`;
 }
 
 function normalizeForDisplay(answer) {
@@ -242,7 +415,9 @@ function validateCurrentAnswer(answer) {
 }
 
 function escapeHtml(text) {
-  return text.replace(/[&<>"']/g, character => ({
+  const decoder = document.createElement('textarea');
+  decoder.innerHTML = String(text ?? '');
+  return decoder.value.replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   })[character]);
 }
@@ -305,6 +480,7 @@ function renderAnswer(markdown) {
 }
 
 const ACTIVE_CODES = new Set(['NOW_DUE', 'CATCHUP_DUE']);
+const CONDITIONAL_CODES = new Set(['CONDITIONALLY_DUE']);
 const INFO_CODES = new Set(['RECORDS_NEEDED', 'PRODUCT_NEEDED', 'HEALTH_STATUS_NEEDED']);
 const MEDICAL_CODES = new Set(['MEDICAL_REVIEW', 'TEMPORARILY_DEFERRED']);
 const INACTIVE_CODES = new Set(['COMPLETED', 'NOT_YET_DUE', 'CATCHUP_WINDOW_CLOSED', 'POPULATION_NOT_APPLICABLE', 'NO_INDICATION']);
@@ -357,12 +533,30 @@ function decisionCode(item) {
   return 'COMPLETED';
 }
 
+function recommendationStatus(item) {
+  if (item.recommendation_status) return item.recommendation_status;
+  if (item.final_state && !/^[A-Z_]+$/.test(item.final_state)) return item.final_state;
+  const code = decisionCode(item);
+  if (code === 'NOW_DUE') return '常规接种';
+  if (code === 'CATCHUP_DUE') return '常规补种';
+  if (code === 'TEMPORARILY_DEFERRED') return '暂缓接种';
+  if (CONDITIONAL_CODES.has(code) || INFO_CODES.has(code) || code === 'MEDICAL_REVIEW') return '需进一步评估';
+  if (code === 'COMPLETED') return '已完成';
+  if (code === 'NOT_YET_DUE') return '尚未到接种时间';
+  if (code === 'CATCHUP_WINDOW_CLOSED') return '已超过接种年龄窗口';
+  if (code === 'POPULATION_NOT_APPLICABLE') return '不属于适用人群';
+  if (code === 'NO_INDICATION') return '目前无明确接种指征';
+  return '';
+}
+
 function buildHealthCaseInfo() {
   return [
+    `评估日期：${value('reference-date', new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Shanghai'}).format(new Date()))}`,
     `年龄或出生日期：${value('age', '未知')}`,
     `性别：${value('sex', '未知')}`,
-    `主要诊断和当前病情：${value('condition', '未知')}`,
-    `近期用药或治疗：${value('treatment', '未填写')}`,
+    `主要诊断及当前健康状况：${value('condition', '未知')}`,
+    `近1年用药及治疗：${value('treatment', '未填写')}`,
+    `免疫功能及相关检查结果：${value('immune-results', '未填写')}`,
     `严重过敏、接种后异常反应和其他说明：${value('other', '未填写')}`,
   ].join('\n');
 }
@@ -387,6 +581,10 @@ function renderStructuredResult(data) {
   const summary = data?.priority_summary || {};
   const patientDecision = data?.patient_decision || {};
   const parentSummary = parentView.summary || {};
+  const canonicalGroups = parentView.grouped_vaccine_ids || null;
+  const groupSets = canonicalGroups ? Object.fromEntries(
+    Object.entries(canonicalGroups).map(([key, ids]) => [key, new Set(Array.isArray(ids) ? ids : [])]),
+  ) : null;
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
@@ -394,11 +592,14 @@ function renderStructuredResult(data) {
     : parentSummary.grouped_record_task
       ? '<p><strong>先核对接种证或电子接种记录。</strong>这是一个记录核对任务，不代表孩子有多项漏种。</p>'
       : '<p>目前没有需要立即处理的项目。</p>';
-  const sourceHtml = (data.sources || []).map(source => source.url
-    ? `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`
-    : `<li>${escapeHtml(source.title)}</li>`).join('');
+  const retrievedSources = Array.isArray(data.retrieved_sources) ? data.retrieved_sources : [];
+  const sourceHtml = retrievedSources.map(source => {
+    const label = [source.file_name, source.section, source.location, source.source_version].filter(Boolean).join('｜');
+    return `<li>${escapeHtml(label || source.evidence_id || '已召回原文片段')} ${source.chunk_id ? `<small>片段：${escapeHtml(source.chunk_id)}</small>` : ''}</li>`;
+  }).join('');
   const highRisk = ['HIGH_RISK_ACTIVE', 'HIGH_RISK_INFORMATION_PENDING', 'RISK_INFORMATION_PENDING', 'TARGETED_MODIFIER', 'ACUTE_DEFER'].includes(patientDecision.gate);
   const summaryParts = [`${Number(parentSummary.action_count ?? summary.action_count ?? 0)}项现在可以安排`];
+  if (Number(parentSummary.conditional_count || 0)) summaryParts.push(`${Number(parentSummary.conditional_count)}项已到年龄、待满足条件`);
   if (Number(parentSummary.record_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.record_items_to_verify)}项接种记录待核实`);
   if (Number(parentSummary.product_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.product_items_to_verify)}项产品路径待核实`);
   if (Number(parentSummary.medical_review_count || 0)) summaryParts.push(`${Number(parentSummary.medical_review_count)}项需要专业评估`);
@@ -406,14 +607,21 @@ function renderStructuredResult(data) {
   if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项疫苗需补充健康状态`);
   if (Number(parentSummary.critical_clinical_information_count || 0)) summaryParts.push(`${Number(parentSummary.critical_clinical_information_count)}项关键临床信息待核实`);
   const routineSummary = `${summaryParts.join('；')}。`;
-  const filterCounts = {
+  const filterCounts = groupSets ? {
+    active: groupSets.active?.size || 0,
+    conditional: groupSets.conditional?.size || 0,
+    info: groupSets.info?.size || 0,
+    medical: groupSets.medical?.size || 0,
+    inactive: groupSets.inactive?.size || 0,
+  } : {
     active: vaccines.filter(item => ACTIVE_CODES.has(decisionCode(item))).length,
+    conditional: vaccines.filter(item => CONDITIONAL_CODES.has(decisionCode(item))).length,
     info: vaccines.filter(item => INFO_CODES.has(decisionCode(item))).length,
     medical: vaccines.filter(item => MEDICAL_CODES.has(decisionCode(item))).length,
     inactive: vaccines.filter(item => INACTIVE_CODES.has(decisionCode(item))).length,
   };
   const initialFilter = filterCounts.active ? 'active'
-    : filterCounts.medical ? 'medical'
+    : filterCounts.conditional ? 'conditional' : filterCounts.medical ? 'medical'
       : filterCounts.info ? 'info' : 'inactive';
   const recognizedHistory = Array.isArray(parentView.recognized_history) ? parentView.recognized_history : [];
   const healthSummaryHtml = parentView.health_summary
@@ -429,12 +637,14 @@ function renderStructuredResult(data) {
     <section class="priority-panel">
       <h3>本次最需要关注</h3>
       <p>${escapeHtml(routineSummary)}</p>
+      ${parentSummary.zero_action_explanation ? `<p class="zero-action-explanation">${escapeHtml(parentSummary.zero_action_explanation)}</p>` : ''}
       ${itemText}
     </section>
     <section>
       <h3>疫苗安排</h3>
       <div class="status-filters" role="group" aria-label="按状态筛选">
-        <button type="button" data-filter="active" ${filterCounts.active ? '' : 'disabled'}>现在可以安排（${filterCounts.active}）</button>
+        <button type="button" data-filter="active">现在可以安排（${filterCounts.active}）</button>
+        <button type="button" data-filter="conditional" ${filterCounts.conditional ? '' : 'disabled'}>已到年龄，待满足条件（${filterCounts.conditional}）</button>
         <button type="button" data-filter="info" ${filterCounts.info ? '' : 'disabled'}>待核实信息（${filterCounts.info}）</button>
         <button type="button" data-filter="medical" ${filterCounts.medical ? '' : 'disabled'}>暂缓或专业评估（${filterCounts.medical}）</button>
         <button type="button" data-filter="inactive" ${filterCounts.inactive ? '' : 'disabled'}>近期无需安排（${filterCounts.inactive}）</button>
@@ -444,15 +654,18 @@ function renderStructuredResult(data) {
     </section>
     ${(data.next_steps || []).length ? `<section><h3>下一步</h3><ol>${data.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></section>` : ''}
     <section><h3>提示</h3><p>本材料用于科研原型和疫苗接种宣教，需由研究人员或预防接种专业人员审核，接种安排以现场评估为准。</p></section>
-    ${sourceHtml ? `<section><h3>主要依据</h3><ul>${sourceHtml}</ul></section>` : ''}`;
+    ${sourceHtml ? `<section><h3>本次实际召回依据</h3><ul>${sourceHtml}</ul></section>` : '<section><h3>本次实际召回依据</h3><p>未记录可绑定的原文片段，相关建议需由研究者复核。</p></section>'}`;
 
   const body = resultContent.querySelector('#vaccine-table-body');
   if (!body) return;
   const draw = filter => {
     const shown = vaccines.filter(item => {
       const code = decisionCode(item);
+      if (filter === 'all') return true;
+      if (groupSets) return groupSets[filter]?.has(item.vaccine_id) || false;
       return filter === 'all'
         || (filter === 'active' && ACTIVE_CODES.has(code))
+        || (filter === 'conditional' && CONDITIONAL_CODES.has(code))
         || (filter === 'info' && INFO_CODES.has(code))
         || (filter === 'medical' && MEDICAL_CODES.has(code))
         || (filter === 'inactive' && INACTIVE_CODES.has(code));
@@ -460,8 +673,10 @@ function renderStructuredResult(data) {
     body.innerHTML = shown.map(item => {
       const code = decisionCode(item);
       const reasonLabel = item.parent_reason_label || REASON_LABELS[item.reason_code] || '接种程序判断';
-      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(item.final_state)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
-    }).join('') || '<tr><td colspan="2">该分类下暂无项目。</td></tr>';
+      const clinicalStatus = recommendationStatus(item);
+      const statusLabel = clinicalStatus || '状态待核实';
+      return `<tr data-state="${escapeHtml(code)}"><td>${renderVaccineName(item)}${implementationText(item)}</td><td><span class="state-pill state-${escapeHtml(code.toLowerCase())}">${escapeHtml(statusLabel)}</span><span class="reason-tag">${escapeHtml(reasonLabel)}</span><p>${escapeHtml(item.caregiver_advice || item.reason || item.detail || '')}</p></td></tr>`;
+    }).join('') || `<tr><td colspan="2">${escapeHtml(filter === 'active' ? (parentSummary.zero_action_explanation || '当前没有已满足直接安排条件的项目，请查看待核实或评估事项。') : '该分类下暂无项目。')}</td></tr>`;
   };
   resultContent.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
     resultContent.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
@@ -473,6 +688,7 @@ function renderStructuredResult(data) {
 }
 
 async function getPassport() {
+  if (!APP_CODE) throw new Error('新版独立服务尚未配置，未向旧版发送请求。');
   const response = await fetch(`${DIFY_ORIGIN}/api/passport`, {
     headers: { 'X-App-Code': APP_CODE },
   });
@@ -493,6 +709,7 @@ async function runWorkflow(caseInfo, healthCaseInfo, vaccinationPayload) {
       case_info: caseInfo,
       health_case_info: healthCaseInfo,
       vaccination_history_json: JSON.stringify(vaccinationPayload),
+      history_complete: vaccinationPayload.record_state === 'COMPLETE' ? 'true' : 'false',
     }, response_mode: 'streaming' }),
   });
   if (!response.ok || !response.body) throw new Error('生成失败，请稍后重试。');
@@ -537,9 +754,19 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   errorBox.hidden = true;
   if (!form.reportValidity()) return;
+  if (form.dataset.reportBusy === 'true') {
+    errorBox.textContent = '报告图片正在本机识别，请等待完成后核对文字。'; errorBox.hidden = false; return;
+  }
+  if (document.querySelector('#report-text')?.value.trim() && !document.querySelector('#report-preview').hidden) {
+    errorBox.textContent = '报告识别文字尚未确认，请先核对并加入对应字段，或清除识别内容。';
+    errorBox.hidden = false;
+    return;
+  }
   const vaccinationRecord = buildVaccinationRecord();
   if (!vaccinationRecord) {
-    errorBox.textContent = '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请勾选“接种记录不清楚”。';
+    errorBox.textContent = vaccinationMode() === 'TEXT'
+      ? '请粘贴或输入接种记录；如果完全不清楚，请选择“接种记录不清楚”。'
+      : '请选择已经接种、明确未接种或需要核实的疫苗；如果完全不清楚，请选择“接种记录不清楚”。';
     errorBox.hidden = false;
     document.querySelector('.vaccine-record-field').scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
@@ -547,6 +774,9 @@ form.addEventListener('submit', async event => {
   vaccinationHidden.value = vaccinationRecord;
 
   submitButton.disabled = true;
+  if (reviewActions) reviewActions.hidden = true;
+  if (researcherReviewed) researcherReviewed.checked = false;
+  if (printResult) printResult.disabled = true;
   submitButton.textContent = '正在生成，请稍候…';
   resultCard.hidden = false;
   statusText.textContent = '正在生成推荐列表';
@@ -555,11 +785,14 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
+    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v21.0-single-merge';
+    if (workflowResult.resultJson?.deployment_contract?.release !== expectedRelease) throw new Error('当前后台版本与表单不匹配，请刷新页面后重试。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
     if (validationIssues.length) throw new Error(`${validationIssues.join('；')}。请重新提交。`);
     if (workflowResult.resultJson?.vaccines?.length) renderStructuredResult(workflowResult.resultJson);
     else renderAnswer(answer);
+    if (reviewActions) reviewActions.hidden = false;
     statusText.textContent = '已完成';
   } catch (error) {
     statusText.textContent = '';
@@ -571,3 +804,8 @@ form.addEventListener('submit', async event => {
     submitButton.textContent = '生成疫苗推荐列表';
   }
 });
+
+researcherReviewed?.addEventListener('change', () => {
+  printResult.disabled = !researcherReviewed.checked;
+});
+printResult?.addEventListener('click', () => window.print());
