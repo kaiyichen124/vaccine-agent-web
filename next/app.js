@@ -1,5 +1,5 @@
 const DIFY_ORIGIN = 'https://udify.app';
-const APP_CODE = '5ZmxU9oPtbuRDyKs';
+const APP_CODE = 'l63CgP5Bp6mjZpRl';
 
 const form = document.querySelector('#case-form');
 const submitButton = document.querySelector('#submit-button');
@@ -415,7 +415,9 @@ function validateCurrentAnswer(answer) {
 }
 
 function escapeHtml(text) {
-  return text.replace(/[&<>"']/g, character => ({
+  const decoder = document.createElement('textarea');
+  decoder.innerHTML = String(text ?? '');
+  return decoder.value.replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   })[character]);
 }
@@ -573,6 +575,10 @@ function renderStructuredResult(data) {
   const summary = data?.priority_summary || {};
   const patientDecision = data?.patient_decision || {};
   const parentSummary = parentView.summary || {};
+  const canonicalGroups = parentView.grouped_vaccine_ids || null;
+  const groupSets = canonicalGroups ? Object.fromEntries(
+    Object.entries(canonicalGroups).map(([key, ids]) => [key, new Set(Array.isArray(ids) ? ids : [])]),
+  ) : null;
   const priorityIds = Array.isArray(summary.items) ? summary.items.map(item => item.vaccine_id) : [];
   const priorityItems = priorityIds.map(id => vaccines.find(item => item.vaccine_id === id)).filter(Boolean);
   const itemText = priorityItems.length
@@ -595,7 +601,13 @@ function renderStructuredResult(data) {
   if (Number(parentSummary.health_items_to_verify || 0)) summaryParts.push(`${Number(parentSummary.health_items_to_verify)}项疫苗需补充健康状态`);
   if (Number(parentSummary.critical_clinical_information_count || 0)) summaryParts.push(`${Number(parentSummary.critical_clinical_information_count)}项关键临床信息待核实`);
   const routineSummary = `${summaryParts.join('；')}。`;
-  const filterCounts = {
+  const filterCounts = groupSets ? {
+    active: groupSets.active?.size || 0,
+    conditional: groupSets.conditional?.size || 0,
+    info: groupSets.info?.size || 0,
+    medical: groupSets.medical?.size || 0,
+    inactive: groupSets.inactive?.size || 0,
+  } : {
     active: vaccines.filter(item => ACTIVE_CODES.has(decisionCode(item))).length,
     conditional: vaccines.filter(item => CONDITIONAL_CODES.has(decisionCode(item))).length,
     info: vaccines.filter(item => INFO_CODES.has(decisionCode(item))).length,
@@ -643,6 +655,8 @@ function renderStructuredResult(data) {
   const draw = filter => {
     const shown = vaccines.filter(item => {
       const code = decisionCode(item);
+      if (filter === 'all') return true;
+      if (groupSets) return groupSets[filter]?.has(item.vaccine_id) || false;
       return filter === 'all'
         || (filter === 'active' && ACTIVE_CODES.has(code))
         || (filter === 'conditional' && CONDITIONAL_CODES.has(code))
@@ -765,7 +779,7 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
-    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v20.0-deepseek-single-source';
+    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v21.0-single-merge';
     if (workflowResult.resultJson?.deployment_contract?.release !== expectedRelease) throw new Error('当前后台版本与表单不匹配，请刷新页面后重试。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
