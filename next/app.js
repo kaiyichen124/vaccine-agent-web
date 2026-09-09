@@ -1,5 +1,5 @@
 const DIFY_ORIGIN = 'https://udify.app';
-const APP_CODE = 'NvRpaqjNOhAITsnZ';
+const APP_CODE = 'ufcX8MEBjSCCnpTM';
 
 const form = document.querySelector('#case-form');
 const submitButton = document.querySelector('#submit-button');
@@ -765,7 +765,7 @@ form.addEventListener('submit', async event => {
 
   try {
     const workflowResult = await runWorkflow(buildCaseInfo(), buildHealthCaseInfo(), buildVaccinationPayload());
-    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v18.0-structured-clinical-policy';
+    const expectedRelease = window.VACCINE_AGENT_CONFIG?.BACKEND_RELEASE || 'v19.0-orthogonal-decisions';
     if (workflowResult.resultJson?.deployment_contract?.release !== expectedRelease) throw new Error('当前后台版本与表单不匹配，请刷新页面后重试。');
     const answer = normalizeForDisplay(workflowResult.answer);
     const validationIssues = validateCurrentAnswer(answer);
