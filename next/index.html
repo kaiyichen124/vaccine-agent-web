@@ -2,117 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="填写儿童健康与接种情况，生成疫苗推荐列表。">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="儿童疫苗推荐助手 v20 DeepSeek单一决策源版">
+  <meta http-equiv="refresh" content="0; url=next/">
   <title>儿童疫苗推荐助手</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23168b78%22/><text x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-size=%2234%22 fill=%22white%22>苗</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=v16-2-rag-routing">
+  <script>window.location.replace('next/' + window.location.search + window.location.hash);</script>
 </head>
 <body>
-  <main class="page-shell">
-    <section class="intro">
-      <div>
-        <h1>儿童疫苗推荐助手</h1>
-        <p>请填写孩子目前的健康和接种情况，提交后生成疫苗建议。结果请由预防接种专业人员审核。</p>
-      </div>
-    </section>
-
-    <form id="case-form" class="case-card">
-      <h2>填写孩子情况</h2>
-      <p class="required-note"><span>*</span> 为必填项</p>
-
-      <div class="form-grid">
-        <label class="field">
-          <span>年龄或出生日期 <b>*</b></span>
-          <input id="age" name="age" type="text" required maxlength="30" placeholder="例如：4岁6个月；或2022-02-15">
-        </label>
-
-        <label class="field">
-          <span>性别 <b>*</b></span>
-          <input id="sex" name="sex" type="text" required maxlength="10" placeholder="例如：男；女">
-        </label>
-
-        <label class="field full">
-          <span>主要诊断及当前健康状况 <b>*</b></span>
-          <textarea id="condition" name="condition" rows="3" required maxlength="3000" placeholder="请填写既往诊断、特殊健康状态（如哮喘、早产、室间隔缺损）及近期发热、咳嗽、流涕、腹泻、呕吐、皮疹、喘息等；尽量注明发生时间、目前是否好转和严重程度。"></textarea>
-        </label>
-
-        <label class="field full">
-          <span>近1年用药及治疗</span>
-          <textarea id="treatment" name="treatment" rows="3" maxlength="3000" placeholder="糖皮质激素、免疫抑制剂、生物制剂、化疗、放疗、输血/血液制品、IVIG等；请注明名称、剂量、使用方式、开始/结束或末次使用时间，目前是否仍在使用。无使用可填“无”，不了解可填“不清楚”。更早的移植及仍影响当前健康的治疗也请补充。"></textarea>
-        </label>
-
-        <section class="field full report-field">
-          <label for="immune-results">免疫功能及相关检查结果</label>
-          <textarea id="immune-results" name="immune-results" rows="4" maxlength="6000" placeholder="可填写血常规、免疫球蛋白/体液免疫、淋巴细胞亚群/细胞免疫等结果；请附检查日期、数值、单位、参考范围及医生解释。未检查填“未检查”，不了解填“不清楚”。"></textarea>
-          <details class="report-import">
-            <summary>拍照 / 选择出院小结或检查报告图片</summary>
-            <p class="field-hint">支持JPG、PNG、WebP，每张不超过10MB。图片仅在本机识别，不上传、不保存；请先遮挡身份信息。核对后的文字将在生成建议时提交给Dify及模型服务。PDF请先转成图片。</p>
-            <label for="report-file">选择报告图片</label><input id="report-file" type="file" accept="image/jpeg,image/png,image/webp">
-            <label for="report-camera">拍照（支持的手机浏览器）</label><input id="report-camera" type="file" accept="image/*" capture="environment">
-            <p id="report-status" role="status" aria-live="polite"></p>
-            <div id="report-preview" hidden>
-              <label for="report-text">识别文字（请核对日期、数值、单位，删除身份信息）</label>
-              <textarea id="report-text" rows="8" maxlength="6000"></textarea>
-              <label for="report-target">文字归入</label><select id="report-target"><option value="immune-results">免疫功能及相关检查结果</option><option value="condition">主要诊断及当前健康状况</option><option value="treatment">近1年用药及治疗</option></select>
-              <button id="report-apply" type="button">已核对，加入所选字段</button>
-              <button id="report-discard" type="button">清除识别内容</button>
-            </div>
-          </details>
-        </section>
-
-        <fieldset class="field full vaccine-record-field">
-          <legend>接种记录 <b>*</b></legend>
-          <div class="record-mode-row">
-            <label><input type="radio" name="vaccination-mode" value="STRUCTURED" checked> 搜索添加疫苗</label>
-            <label><input type="radio" name="vaccination-mode" value="TEXT"> 批量粘贴接种记录</label>
-            <label><input type="radio" name="vaccination-mode" value="UNKNOWN"> 接种记录不清楚</label>
-          </div>
-          <label id="history-complete-option" class="history-complete-option"><input id="history-complete" type="checkbox"> 已按接种证完整录入 <small>未列项目按接种证无记录处理</small></label>
-          <div id="vaccination-text-panel" class="vaccination-text-panel" hidden>
-            <label for="vaccination-extra">直接粘贴或输入接种记录</label>
-            <textarea id="vaccination-extra" rows="7" maxlength="5000" placeholder="建议每种疫苗一行，例如：&#10;乙肝：第1剂 2024-01-15；第2剂 2024-02-15；第3剂 2024-07-15&#10;IPV：第1剂 2024-03-15；第2剂 2024-04-15&#10;百白破：第1剂 2024-03-15；第2剂 2024-05-15；第3剂 2024-07-15；第4剂未接种"></textarea>
-            <p class="field-hint">尽量写“疫苗名称 + 第几剂 + 日期”。可以写“未接种、漏种、已完成全程”；不要用“出生至2岁均已完成”代替逐项记录。</p>
-          </div>
-          <div id="vaccine-selector" class="vaccine-selector">
-            <label class="vaccine-search-label" for="vaccine-search">输入疫苗名称</label>
-            <input id="vaccine-search" type="search" autocomplete="off">
-            <div id="vaccine-option-groups" class="vaccine-option-groups" aria-live="polite"></div>
-            <div id="selected-vaccine-records" class="selected-vaccine-records" aria-live="polite">
-              <p class="empty-selection">尚未选择疫苗。</p>
-            </div>
-          </div>
-          <input id="vaccination" name="vaccination" type="hidden">
-        </fieldset>
-
-        <label class="field full">
-          <span>过敏、接种后异常反应和其他说明</span>
-          <textarea id="other" name="other" rows="3" maxlength="2000" placeholder="食物过敏、药物过敏、疫苗或疫苗成分过敏、既往疫苗接种后严重异常反应等；请注明诱因、时间、具体表现及是否急救/住院。无可填“无”，不了解可填“不清楚”。"></textarea>
-        </label>
-      </div>
-
-      <details class="assessment-options"><summary>评估日期（默认今天；历史病例评测可修改）</summary><label for="reference-date">本次评估日期</label><input id="reference-date" type="date" required></details>
-      <p id="form-error" class="form-error" role="alert" hidden></p>
-      <button id="submit-button" class="submit-button" type="submit">生成疫苗推荐列表</button>
-    </form>
-
-    <section id="result-card" class="result-card" hidden aria-live="polite">
-      <div class="result-title-row">
-        <h2>疫苗推荐列表</h2>
-        <span id="status-text"></span>
-      </div>
-      <div id="review-actions" class="review-actions" hidden>
-        <label><input id="researcher-reviewed" type="checkbox"> 研究者已核对病例事实、逐项状态及引用证据</label>
-        <button id="print-result" type="button" disabled>打印宣教材料</button>
-      </div>
-      <div id="result-content" class="result-content"></div>
-    </section>
-
-    <p class="privacy-note">请勿填写姓名、身份证号、电话、住址或住院号等身份信息。</p>
-  </main>
-  <script src="clinical-inputs.js?v=v16-2-rag-local"></script>
-  <script src="app.js?v=v21-single-merge"></script>
-  <script src="config.js?v=v21-single-merge"></script>
-  <script src="v153-bridge.js?v=v16-2-rag-local"></script>
+  <p>正在进入儿童疫苗推荐助手 v20… <a href="next/">点击进入</a></p>
 </body>
 </html>
